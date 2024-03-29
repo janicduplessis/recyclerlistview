@@ -70,7 +70,6 @@ export class WrapGridLayoutManager extends LayoutManager {
         this._isHorizontal = !!isHorizontal;
         this._layouts = cachedLayouts ? cachedLayouts : [];
 
-
         this._anchorCount = 0;
 
         this._fixIndex = -1;
@@ -78,7 +77,7 @@ export class WrapGridLayoutManager extends LayoutManager {
         this._shouldRefix = false;
         this._refixOffset = 0;
 
-        this.preparePreservedIndex = function (firstVisibleIndex) {
+        this.preparePreservedIndex = function(firstVisibleIndex: number): void {
             if ((this._fixIndex > -1) || (firstVisibleIndex >= this._anchorCount)) {
                 this._fixIndex = firstVisibleIndex;
             }
@@ -108,13 +107,11 @@ export class WrapGridLayoutManager extends LayoutManager {
         const layout = this._layouts[index];
         if (layout) {
             if ((!layout.isOverridden) && index === this._anchorCount) {
-                for (
-                    var i = this._anchorCount;
-                    this._layouts[i + 1].isOverridden;
-                    i++
-                ) {}
-                this._anchorCount = i + 1;
+                let i = this._anchorCount;
+                while (this._layouts[i + 1].isOverridden) {
+                    i++;
                 }
+                this._anchorCount = i + 1;
             }
             layout.isOverridden = true;
             layout.width = dim.width;
@@ -146,160 +143,159 @@ export class WrapGridLayoutManager extends LayoutManager {
 
         let oldLayout = null;
 
+        let index = startIndex;
+
         if ((startIndex <= this._fixIndex) && (this._fixIndex < oldItemCount)) {
-                if (!this._shouldRefix) {
-                        for (var i = startIndex; i < Math.min(itemCount, this._fixIndex) - 1; i++) {
-                            oldLayout = this._layouts[i];
-                            const layoutType = this._layoutProvider.getLayoutTypeForIndex(i);
-                            if (oldLayout && oldLayout.isOverridden && oldLayout.type === layoutType) {
-                                itemDim.height = oldLayout.height;
-                                itemDim.width = oldLayout.width;
-                            } else {
-                                this._layoutProvider.setComputedLayout(layoutType, itemDim, i);
-                            }
-                            this.setMaxBounds(itemDim);
+            if (!this._shouldRefix) {
+                for (; index < Math.min(itemCount, this._fixIndex) - 1; index++) {
+                    oldLayout = this._layouts[index];
+                    const layoutType = this._layoutProvider.getLayoutTypeForIndex(index);
+                    if (oldLayout && oldLayout.isOverridden && oldLayout.type === layoutType) {
+                        itemDim.height = oldLayout.height;
+                        itemDim.width = oldLayout.width;
+                    } else {
+                        this._layoutProvider.setComputedLayout(layoutType, itemDim, index);
+                    }
+                    this.setMaxBounds(itemDim);
 
-                            itemRect = this._layouts[i];
-                            itemRect.type = layoutType;
-                            itemRect.width = itemDim.width;
-                            itemRect.height = itemDim.height;
-                        }
-
-                        oldLayout = this._layouts[i];
-                        const layoutType = this._layoutProvider.getLayoutTypeForIndex(i);
-                        if (oldLayout && oldLayout.isOverridden && oldLayout.type === layoutType) {
-                            itemDim.height = oldLayout.height;
-                            itemDim.width = oldLayout.width;
-                        } else {
-                            this._layoutProvider.setComputedLayout(layoutType, itemDim, i);
-                        }
-                        this.setMaxBounds(itemDim);
-
-                        itemRect = this._layouts[i];
-                        itemRect.type = layoutType;
-                        itemRect.width = itemDim.width;
-                        itemRect.height = itemDim.height;
-
-                        if (this._isHorizontal) {
-                            startY += itemDim.height;
-                        } else {
-                            startX += itemDim.width;
-                        }
-
-                        // fix backwards
-                        var fixY = itemRect.y;
-                        for (var j = i - 1; j >= 0; j --) {
-                                fixY -= this._layouts[j].height;
-                                if (this._layouts[j].y === fixY) {
-                                        break;
-                                }
-                                else {
-                                        this._layouts[j].y = fixY;
-                                }
-                        }
-
-                        // set loop state as if looped until i
-                        maxBound = itemDim.height;
-
-                        var startVal = this._layouts[i];
-                        startX = startVal.x;
-                        startY = startVal.y;
-                        this._pointDimensionsToRect(startVal);
-                }
-                else {
-                        var startVal = this._layouts[startIndex];
-                        startX = startVal.x;
-                        startY = startVal.y;
-                        this._pointDimensionsToRect(startVal);
-
-                        for (var i = startIndex; i < Math.min(itemCount, this._fixIndex) - 1; i++) {
-                            oldLayout = this._layouts[i];
-                            const layoutType = this._layoutProvider.getLayoutTypeForIndex(i);
-                            if (oldLayout && oldLayout.isOverridden && oldLayout.type === layoutType) {
-                                itemDim.height = oldLayout.height;
-                                itemDim.width = oldLayout.width;
-                            } else {
-                                this._layoutProvider.setComputedLayout(layoutType, itemDim, i);
-                            }
-                            this.setMaxBounds(itemDim);
-                            if (!this._checkBounds(startX, startY, itemDim, this._isHorizontal)) {
-                                if (this._isHorizontal) {
-                                    startX += maxBound;
-                                    startY = 0;
-                                    this._totalWidth += maxBound;
-                                } else {
-                                    startX = 0;
-                                    startY += maxBound;
-                                    this._totalHeight += maxBound;
-                                }
-                                maxBound = 0;
-                            }
-
-                            maxBound = this._isHorizontal ? Math.max(maxBound, itemDim.width) : Math.max(maxBound, itemDim.height);
-
-                            itemRect = this._layouts[i];
-                            itemRect.x = startX;
-                            itemRect.y = startY;
-                            itemRect.type = layoutType;
-                            itemRect.width = itemDim.width;
-                            itemRect.height = itemDim.height;
-
-                            if (this._isHorizontal) {
-                                startY += itemDim.height;
-                            } else {
-                                startX += itemDim.width;
-                            }
-                        }
-
-                        oldLayout = this._layouts[i];
-                        const layoutType = this._layoutProvider.getLayoutTypeForIndex(i);
-                        if (oldLayout && oldLayout.isOverridden && oldLayout.type === layoutType) {
-                            itemDim.height = oldLayout.height;
-                            itemDim.width = oldLayout.width;
-                        } else {
-                            this._layoutProvider.setComputedLayout(layoutType, itemDim, i);
-                        }
-                        this.setMaxBounds(itemDim);
-                        if (!this._checkBounds(startX, startY, itemDim, this._isHorizontal)) {
-                            if (this._isHorizontal) {
-                                startX += maxBound;
-                                startY = 0;
-                                this._totalWidth += maxBound;
-                            } else {
-                                startX = 0;
-                                startY += maxBound;
-                                this._totalHeight += maxBound;
-                            }
-                            maxBound = 0;
-                        }
-
-                        maxBound = this._isHorizontal ? Math.max(maxBound, itemDim.width) : Math.max(maxBound, itemDim.height);
-
-                        // report diff
-                        this._refixOffset = startY - itemRect.y;
-                        // reset fix
-                        if (this._fixIndex < this._anchorCount) {
-                            this._fixIndex = -1;
-                        }
-
-                        itemRect = this._layouts[i];
-                        itemRect.x = startX;
-                        itemRect.y = startY;
-                        itemRect.type = layoutType;
-                        itemRect.width = itemDim.width;
-                        itemRect.height = itemDim.height;
-
-                        if (this._isHorizontal) {
-                            startY += itemDim.height;
-                        } else {
-                            startX += itemDim.width;
-                        }
+                    itemRect = this._layouts[index];
+                    itemRect.type = layoutType;
+                    itemRect.width = itemDim.width;
+                    itemRect.height = itemDim.height;
                 }
 
-                startIndex = i + 1;
-        }
-        else {
-            var startVal = this._layouts[startIndex];
+                oldLayout = this._layouts[index];
+                const fixLayoutType = this._layoutProvider.getLayoutTypeForIndex(index);
+                if (oldLayout && oldLayout.isOverridden && oldLayout.type === fixLayoutType) {
+                    itemDim.height = oldLayout.height;
+                    itemDim.width = oldLayout.width;
+                } else {
+                    this._layoutProvider.setComputedLayout(fixLayoutType, itemDim, index);
+                }
+                this.setMaxBounds(itemDim);
+
+                itemRect = this._layouts[index];
+                itemRect.type = fixLayoutType;
+                itemRect.width = itemDim.width;
+                itemRect.height = itemDim.height;
+
+                if (this._isHorizontal) {
+                    startY += itemDim.height;
+                } else {
+                    startX += itemDim.width;
+                }
+
+                // fix backwards
+                let fixY = itemRect.y;
+                for (let i = index - 1; i >= 0; i --) {
+                    fixY -= this._layouts[i].height;
+                    if (this._layouts[i].y === fixY) {
+                            break;
+                    } else {
+                            this._layouts[i].y = fixY;
+                    }
+                }
+
+                // set loop state as if looped until index
+                maxBound = itemDim.height;
+
+                const startVal = this._layouts[index];
+                startX = startVal.x;
+                startY = startVal.y;
+                this._pointDimensionsToRect(startVal);
+            } else {
+                const startVal = this._layouts[startIndex];
+                startX = startVal.x;
+                startY = startVal.y;
+                this._pointDimensionsToRect(startVal);
+
+                for (; index < Math.min(itemCount, this._fixIndex) - 1; index++) {
+                    oldLayout = this._layouts[index];
+                    const layoutType = this._layoutProvider.getLayoutTypeForIndex(index);
+                    if (oldLayout && oldLayout.isOverridden && oldLayout.type === layoutType) {
+                        itemDim.height = oldLayout.height;
+                        itemDim.width = oldLayout.width;
+                    } else {
+                        this._layoutProvider.setComputedLayout(layoutType, itemDim, index);
+                    }
+                    this.setMaxBounds(itemDim);
+                    if (!this._checkBounds(startX, startY, itemDim, this._isHorizontal)) {
+                        if (this._isHorizontal) {
+                            startX += maxBound;
+                            startY = 0;
+                            this._totalWidth += maxBound;
+                        } else {
+                            startX = 0;
+                            startY += maxBound;
+                            this._totalHeight += maxBound;
+                        }
+                        maxBound = 0;
+                    }
+
+                    maxBound = this._isHorizontal ? Math.max(maxBound, itemDim.width) : Math.max(maxBound, itemDim.height);
+
+                    itemRect = this._layouts[index];
+                    itemRect.x = startX;
+                    itemRect.y = startY;
+                    itemRect.type = layoutType;
+                    itemRect.width = itemDim.width;
+                    itemRect.height = itemDim.height;
+
+                    if (this._isHorizontal) {
+                        startY += itemDim.height;
+                    } else {
+                        startX += itemDim.width;
+                    }
+                }
+
+                oldLayout = this._layouts[index];
+                const fixLayoutType = this._layoutProvider.getLayoutTypeForIndex(index);
+                if (oldLayout && oldLayout.isOverridden && oldLayout.type === fixLayoutType) {
+                    itemDim.height = oldLayout.height;
+                    itemDim.width = oldLayout.width;
+                } else {
+                    this._layoutProvider.setComputedLayout(fixLayoutType, itemDim, index);
+                }
+                this.setMaxBounds(itemDim);
+                if (!this._checkBounds(startX, startY, itemDim, this._isHorizontal)) {
+                    if (this._isHorizontal) {
+                        startX += maxBound;
+                        startY = 0;
+                        this._totalWidth += maxBound;
+                    } else {
+                        startX = 0;
+                        startY += maxBound;
+                        this._totalHeight += maxBound;
+                    }
+                    maxBound = 0;
+                }
+
+                maxBound = this._isHorizontal ? Math.max(maxBound, itemDim.width) : Math.max(maxBound, itemDim.height);
+
+                // report diff
+                this._refixOffset = startY - itemRect.y;
+                // reset fix
+                if (this._fixIndex < this._anchorCount) {
+                    this._fixIndex = -1;
+                }
+
+                itemRect = this._layouts[index];
+                itemRect.x = startX;
+                itemRect.y = startY;
+                itemRect.type = fixLayoutType;
+                itemRect.width = itemDim.width;
+                itemRect.height = itemDim.height;
+
+                if (this._isHorizontal) {
+                    startY += itemDim.height;
+                } else {
+                    startX += itemDim.width;
+                }
+            }
+
+            index = index + 1;
+        } else {
+            const startVal = this._layouts[startIndex];
             if (startVal) {
                 startX = startVal.x;
                 startY = startVal.y;
@@ -307,14 +303,14 @@ export class WrapGridLayoutManager extends LayoutManager {
             }
         }
 
-        for (var i = startIndex; i < itemCount; i++) {
-            oldLayout = this._layouts[i];
-            const layoutType = this._layoutProvider.getLayoutTypeForIndex(i);
+        for (; index < itemCount; index++) {
+            oldLayout = this._layouts[index];
+            const layoutType = this._layoutProvider.getLayoutTypeForIndex(index);
             if (oldLayout && oldLayout.isOverridden && oldLayout.type === layoutType) {
                 itemDim.height = oldLayout.height;
                 itemDim.width = oldLayout.width;
             } else {
-                this._layoutProvider.setComputedLayout(layoutType, itemDim, i);
+                this._layoutProvider.setComputedLayout(layoutType, itemDim, index);
             }
             this.setMaxBounds(itemDim);
             if (!this._checkBounds(startX, startY, itemDim, this._isHorizontal)) {
@@ -333,10 +329,10 @@ export class WrapGridLayoutManager extends LayoutManager {
             maxBound = this._isHorizontal ? Math.max(maxBound, itemDim.width) : Math.max(maxBound, itemDim.height);
 
             //TODO: Talha creating array upfront will speed this up
-            if (i > oldItemCount - 1) {
+            if (index > oldItemCount - 1) {
                 this._layouts.push({ x: startX, y: startY, height: itemDim.height, width: itemDim.width, type: layoutType });
             } else {
-                itemRect = this._layouts[i];
+                itemRect = this._layouts[index];
                 itemRect.x = startX;
                 itemRect.y = startY;
                 itemRect.type = layoutType;

@@ -787,7 +787,7 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
     }
 
     private _waitUnfixLayout = debounce(() => {
-        this._unfixLayout():
+        this._unfixLayout();
     }, 500);
     private _unfixLayout = () => {
         const layoutManager = this._virtualRenderer.getLayoutManager();

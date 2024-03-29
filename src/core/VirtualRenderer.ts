@@ -58,7 +58,7 @@ export default class VirtualRenderer {
                 scrollOnNextUpdate: (point: Point) => void,
                 fetchStableId: StableIdProvider,
                 isRecyclingEnabled: boolean,
-        preserveVisiblePosition: boolean) {
+                preserveVisiblePosition: boolean) {
         //Keeps track of items that need to be rendered in the next render cycle
         this._renderStack = {};
 
@@ -80,7 +80,7 @@ export default class VirtualRenderer {
         this._startKey = 0;
 
         this.onVisibleItemsChanged = null;
-    this._preserveVisiblePosition = preserveVisiblePosition;
+        this._preserveVisiblePosition = preserveVisiblePosition;
     }
 
     public getLayoutDimension(): Dimension {
@@ -374,9 +374,9 @@ export default class VirtualRenderer {
     }
 
     private _onVisibleItemsChanged = (all: number[], now: number[], notNow: number[]): void => {
-    if (this._preserveVisiblePosition && now.length) {
+        if (this._preserveVisiblePosition && now.length) {
             this._layoutManager.preparePreservedIndex(now[0]);
-    }
+        }
         if (this.onVisibleItemsChanged) {
             this.onVisibleItemsChanged(all, now, notNow);
         }
