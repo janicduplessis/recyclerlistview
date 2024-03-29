@@ -85,6 +85,7 @@ export default abstract class StickyObject<P extends StickyObjectProps> extends 
             (!this.props.renderContainer && [{ position: "absolute", width: this._scrollableWidth }, this.containerPosition])];
 
         const content = (
+            // @ts-ignore
             <Animated.View style={containerStyle}>
                 {this.stickyVisiblity ? this._renderSticky() : null}
             </Animated.View>

@@ -76,6 +76,7 @@ export default class ScrollComponent extends BaseScrollComponent {
         //     ...props,
         // } = this.props;
         return (
+            // @ts-ignore
             <Scroller ref={this._getScrollViewRef}
                 removeClippedSubviews={false}
                 scrollEventThrottle={this.props.scrollThrottle}
@@ -103,18 +104,24 @@ export default class ScrollComponent extends BaseScrollComponent {
 
     private _onScroll = (event?: NativeSyntheticEvent<NativeScrollEvent>): void => {
         if (event) {
+            // @ts-ignore
             const contentOffset = event.nativeEvent.contentOffset;
             this._offset = this.props.isHorizontal ? contentOffset.x : contentOffset.y;
+            // @ts-ignore
             this.props.onScroll(contentOffset.x, contentOffset.y, event);
         }
     }
 
     private _onLayout = (event: LayoutChangeEvent): void => {
+        // @ts-ignore
         if (this._height !== event.nativeEvent.layout.height || this._width !== event.nativeEvent.layout.width) {
+            // @ts-ignore
             this._height = event.nativeEvent.layout.height;
+            // @ts-ignore
             this._width = event.nativeEvent.layout.width;
             if (this.props.onSizeChanged) {
                 this._isSizeChangedCalledOnce = true;
+                // @ts-ignore
                 this.props.onSizeChanged(event.nativeEvent.layout);
             }
         }
