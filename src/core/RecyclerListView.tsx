@@ -105,6 +105,7 @@ export interface RecyclerListViewProps {
     optimizeForInsertDeleteAnimations?: boolean;
     style?: object | number;
     debugHandlers?: DebugHandlers;
+    preserveVisiblePosition?: boolean;
     renderContentContainer?: (props?: object, children?: React.ReactNode) => React.ReactNode | null;
     renderItemContainer?: (props: object, parentProps: object, children?: React.ReactNode) => React.ReactNode;
     //For all props that need to be proxied to inner/external scrollview. Put them in an object and they'll be spread
@@ -170,6 +171,11 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
     private _scrollComponent: BaseScrollComponent | null = null;
     private _windowCorrectionConfig: WindowCorrectionConfig;
 
+    private _shouldRefix: boolean = false;
+    private _baseOffset: number = 0;
+    private _refixOffset: number = 0;
+    private onVisibleIndicesChanged: ((all: number[], now: number[], notNow: number[]) => void) | null = null;
+
     //If the native content container is used, then positions of the list items are changed on the native side. The animated library used
     //by the default item animator also changes the same positions which could lead to inconsistency. Hence, the base item animator which
     //does not perform any such animations will be used.
@@ -182,7 +188,6 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
         }, (index) => {
             return this.props.dataProvider.getStableId(index);
         }, !props.disableRecycling, !!props.preserveVisiblePosition);
-        this.onVisibleIndicesChanged = null;
         this._virtualRenderer.attachVisibleItemsListener(this._onVisibleIndicesChanged);
 
         if (this.props.windowCorrectionConfig) {
@@ -216,10 +221,6 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
                 renderStack: {},
             } as S;
         }
-
-        this._shouldRefix = false;
-        this._baseOffset = 0;
-        this._refixOffset = 0;
     }
 
     public componentWillReceivePropsCompat(newProps: RecyclerListViewProps): void {
@@ -555,10 +556,10 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
             if (layoutManager) {
                 const dataProviderSize = newProps.dataProvider.getSize();
 
-                layoutManager._shouldRefix = true;
+                layoutManager.setShouldRefix(true);
                 layoutManager.relayoutFromIndex(0, dataProviderSize);
 
-                this._refixOffset = this._baseOffset + layoutManager._refixOffset;
+                this._refixOffset = this._baseOffset + layoutManager.getRefixOffset();
 
                 this._immediateRefreshViewability();
             }
@@ -790,8 +791,9 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
         this._unfixLayout();
     }, 500);
     private _unfixLayout = () => {
-        const layoutManager = this._virtualRenderer.getLayoutManager();
-        if (layoutManager._fixIndex > -1) {
+        //Cannot be null here
+        const layoutManager: LayoutManager = this._virtualRenderer.getLayoutManager() as LayoutManager;
+        if (layoutManager.isFixed()) {
             this._shouldRefix = true;
             this._immediateStateRefresh();
         }
@@ -811,7 +813,7 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
         this._waitUnfixLayout();
     }
 
-    private _onVisibleIndicesChanged = (all, now, notNow): void => {
+    private _onVisibleIndicesChanged = (all: number[], now: number[], notNow: number[]): void => {
         if ((now.length === 0) || (now[0] === 0) || (now[now.length - 1] === this._params.itemCount - 1)) {
             setTimeout(() => {
                 this._unfixLayout();
@@ -819,7 +821,7 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
         }
 
         if (this.onVisibleIndicesChanged) {
-            this.onVisibleIndicesChanged!();
+            this.onVisibleIndicesChanged!(all, now, notNow);
         }
     }
     private _processOnEndReached(): void {
@@ -940,6 +942,8 @@ RecyclerListView.propTypes = {
     //Note: You might want to look into DefaultNativeItemAnimator to check an implementation based on LayoutAnimation. By default,
     //animations are JS driven to avoid workflow interference. Also, please note LayoutAnimation is buggy on Android.
     itemAnimator: PropTypes.instanceOf(BaseItemAnimator),
+
+    preserveVisiblePosition: PropTypes.bool,
 
     //All of the Recyclerlistview item cells are enclosed inside this item container. The idea is pass a native UI component which implements a
     //view shifting algorithm to remove the overlaps between the neighbouring views. This is achieved by shifting them by the appropriate

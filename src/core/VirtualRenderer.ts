@@ -374,7 +374,7 @@ export default class VirtualRenderer {
     }
 
     private _onVisibleItemsChanged = (all: number[], now: number[], notNow: number[]): void => {
-        if (this._preserveVisiblePosition && now.length) {
+        if (this._preserveVisiblePosition && now.length && this._layoutManager) {
             this._layoutManager.preparePreservedIndex(now[0]);
         }
         if (this.onVisibleItemsChanged) {

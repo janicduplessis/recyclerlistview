@@ -51,6 +51,11 @@ export abstract class LayoutManager {
 
     //Recompute layouts from given index, compute heavy stuff should be here
     public abstract relayoutFromIndex(startIndex: number, itemCount: number): void;
+
+    public abstract isFixed(): boolean;
+    public abstract setShouldRefix(shouldRefix: boolean): void;
+    public abstract getRefixOffset(): number;
+    public abstract preparePreservedIndex(firstVisibleIndex: number): void;
 }
 
 export class WrapGridLayoutManager extends LayoutManager {
@@ -61,6 +66,13 @@ export class WrapGridLayoutManager extends LayoutManager {
     private _isHorizontal: boolean;
     private _layouts: Layout[];
 
+    private _anchorCount: number = 0;
+
+    private _fixIndex: number = -1;
+
+    private _shouldRefix: boolean = false;
+    private _refixOffset: number = 0;
+
     constructor(layoutProvider: LayoutProvider, renderWindowSize: Dimension, isHorizontal: boolean = false, cachedLayouts?: Layout[]) {
         super();
         this._layoutProvider = layoutProvider;
@@ -69,19 +81,21 @@ export class WrapGridLayoutManager extends LayoutManager {
         this._totalWidth = 0;
         this._isHorizontal = !!isHorizontal;
         this._layouts = cachedLayouts ? cachedLayouts : [];
+    }
 
-        this._anchorCount = 0;
-
-        this._fixIndex = -1;
-
-        this._shouldRefix = false;
-        this._refixOffset = 0;
-
-        this.preparePreservedIndex = function(firstVisibleIndex: number): void {
-            if ((this._fixIndex > -1) || (firstVisibleIndex >= this._anchorCount)) {
-                this._fixIndex = firstVisibleIndex;
-            }
-        };
+    public isFixed(): boolean {
+        return this._fixIndex > -1;
+    }
+    public setShouldRefix(shouldRefix: boolean): void {
+        this._shouldRefix = shouldRefix;
+    }
+    public getRefixOffset(): number {
+        return this._refixOffset;
+    }
+    public preparePreservedIndex(firstVisibleIndex: number): void {
+        if ((this._fixIndex > -1) || (firstVisibleIndex >= this._anchorCount)) {
+            this._fixIndex = firstVisibleIndex;
+        }
     }
 
     public getContentDimension(): Dimension {
@@ -270,6 +284,8 @@ export class WrapGridLayoutManager extends LayoutManager {
                     maxBound = 0;
                 }
 
+                itemRect = this._layouts[index];
+
                 maxBound = this._isHorizontal ? Math.max(maxBound, itemDim.width) : Math.max(maxBound, itemDim.height);
 
                 // report diff
@@ -279,7 +295,6 @@ export class WrapGridLayoutManager extends LayoutManager {
                     this._fixIndex = -1;
                 }
 
-                itemRect = this._layouts[index];
                 itemRect.x = startX;
                 itemRect.y = startY;
                 itemRect.type = fixLayoutType;

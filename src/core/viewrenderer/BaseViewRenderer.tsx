@@ -23,6 +23,7 @@ export interface ViewRendererProps<T> {
     itemAnimator: ItemAnimator;
     styleOverrides?: object;
     forceNonDeterministicRendering?: boolean;
+    isOverridden?: boolean;
     isHorizontal?: boolean;
     extendedState?: object;
     internalSnapshot?: object;
