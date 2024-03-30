@@ -181,7 +181,9 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
             this._pendingScrollToOffset = offset;
         }, (index) => {
             return this.props.dataProvider.getStableId(index);
-        }, !props.disableRecycling);
+        }, !props.disableRecycling, !!props.preserveVisiblePosition);
+        this.onVisibleIndicesChanged = null;
+        this._virtualRenderer.attachVisibleItemsListener(this._onVisibleIndicesChanged);
 
         if (this.props.windowCorrectionConfig) {
             let windowCorrection;
@@ -214,6 +216,10 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
                 renderStack: {},
             } as S;
         }
+
+        this._shouldRefix = false;
+        this._baseOffset = 0;
+        this._refixOffset = 0;
     }
 
     public componentWillReceivePropsCompat(newProps: RecyclerListViewProps): void {
@@ -226,7 +232,7 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
             throw new CustomError(RecyclerListViewExceptions.usingOldVisibleIndexesChangedParam);
         }
         if (newProps.onVisibleIndicesChanged) {
-            this._virtualRenderer.attachVisibleItemsListener(newProps.onVisibleIndicesChanged!);
+            this.onVisibleIndicesChanged = newProps.onVisibleIndicesChanged!;
         }
     }
 
@@ -414,6 +420,11 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
         //     ...props,
         // } = this.props;
 
+        if (this._refixOffset && this._scrollComponent) {
+            this._scrollComponent.scrollTo(0, this._refixOffset, false);
+            this._refixOffset = 0;
+        }
+
         return (
             <ScrollComponent
                 ref={(scrollComponent) => this._scrollComponent = scrollComponent as BaseScrollComponent | null}
@@ -529,7 +540,7 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
             if (layoutManager) {
                 const cachedLayouts = layoutManager.getLayouts();
                 this._virtualRenderer.setLayoutManager(newProps.layoutProvider.createLayoutManager(this._layout, newProps.isHorizontal, cachedLayouts));
-                this._refreshViewability();
+                this._immediateRefreshViewability();
             }
         } else if (this._relayoutReqIndex >= 0) {
             const layoutManager = this._virtualRenderer.getLayoutManager();
@@ -537,15 +548,34 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
                 const dataProviderSize = newProps.dataProvider.getSize();
                 layoutManager.relayoutFromIndex(Math.min(Math.max(dataProviderSize - 1, 0), this._relayoutReqIndex), dataProviderSize);
                 this._relayoutReqIndex = -1;
-                this._refreshViewability();
+                this._immediateRefreshViewability();
             }
+        } else if (this._shouldRefix) {
+            const layoutManager = this._virtualRenderer.getLayoutManager();
+            if (layoutManager) {
+                const dataProviderSize = newProps.dataProvider.getSize();
+
+                layoutManager._shouldRefix = true;
+                layoutManager.relayoutFromIndex(0, dataProviderSize);
+
+                this._refixOffset = this._baseOffset + layoutManager._refixOffset;
+
+                this._immediateRefreshViewability();
+            }
+            this._shouldRefix = false;
+        }
+        if (this._shouldRefix) {
+            this._waitUnfixLayout();
         }
     }
 
     private _refreshViewability(): void {
         this._virtualRenderer.refresh();
         this._queueStateRefresh();
-
+    }
+    private _immediateRefreshViewability(): void {
+        this._virtualRenderer.refresh();
+        this._immediateStateRefresh();
     }
 
     private _queueStateRefresh(): void {
@@ -555,6 +585,11 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
                     return prevState;
                 });
             }
+        });
+    }
+    private _immediateStateRefresh(): void {
+        this.setState((prevState) => {
+            return prevState;
         });
     }
 
@@ -619,7 +654,7 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
             throw new CustomError(RecyclerListViewExceptions.usingOldVisibleIndexesChangedParam);
         }
         if (props.onVisibleIndicesChanged) {
-            this._virtualRenderer.attachVisibleItemsListener(props.onVisibleIndicesChanged!);
+            this.onVisibleIndicesChanged = props.onVisibleIndicesChanged!;
         }
         this._params = {
             initialOffset: this._initialOffset ? this._initialOffset : props.initialOffset,
@@ -682,6 +717,7 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
             }
             return (
                 <ViewRenderer key={key} data={data}
+                    isOverridden={!!itemRect.isOverridden}
                     dataHasChanged={this._dataHasChanged}
                     x={itemRect.x}
                     y={itemRect.y}
@@ -750,6 +786,17 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
         return renderedItems;
     }
 
+    private _waitUnfixLayout = debounce(() => {
+        this._unfixLayout():
+    }, 500);
+    private _unfixLayout = () => {
+        const layoutManager = this._virtualRenderer.getLayoutManager();
+        if (layoutManager._fixIndex > -1) {
+            this._shouldRefix = true;
+            this._immediateStateRefresh();
+        }
+    };
+
     private _onScroll = (offsetX: number, offsetY: number, rawEvent: ScrollEvent): void => {
         // correction to be positive to shift offset upwards; negative to push offset downwards.
         // extracting the correction value from logical offset and updating offset of virtual renderer.
@@ -759,8 +806,22 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
             this.props.onScroll(rawEvent, offsetX, offsetY);
         }
         this._processOnEndReached();
+
+        this._baseOffset = offsetY;
+        this._waitUnfixLayout();
     }
 
+    private _onVisibleIndicesChanged = (all, now, notNow): void => {
+        if ((now.length === 0) || (now[0] === 0) || (now[now.length - 1] === this._params.itemCount - 1)) {
+            setTimeout(() => {
+                this._unfixLayout();
+            }, 0);
+        }
+
+        if (this.onVisibleIndicesChanged) {
+            this.onVisibleIndicesChanged!();
+        }
+    }
     private _processOnEndReached(): void {
         if (this.props.onEndReached && this._virtualRenderer) {
             const layout = this._virtualRenderer.getLayoutDimension();

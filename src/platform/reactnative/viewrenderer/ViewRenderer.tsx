@@ -79,8 +79,9 @@ export default class ViewRenderer extends BaseViewRenderer<any> {
         // @ts-ignore
         const yDiff = Math.abs(this.props.y - event.nativeEvent.layout.y);
         if (xDiff < 1 && yDiff < 1 &&
-            // @ts-ignore
-            (this.props.height !== event.nativeEvent.layout.height ||
+            (!this.props.isOverridden ||
+                // @ts-ignore
+                this.props.height !== event.nativeEvent.layout.height ||
                 // @ts-ignore
                 this.props.width !== event.nativeEvent.layout.width)) {
             // @ts-ignore

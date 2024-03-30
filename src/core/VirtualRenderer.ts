@@ -52,11 +52,13 @@ export default class VirtualRenderer {
     private _viewabilityTracker: ViewabilityTracker | null = null;
     private _dimensions: Dimension | null;
     private _optimizeForAnimations: boolean = false;
+    private _preserveVisiblePosition: boolean = false;
 
     constructor(renderStackChanged: (renderStack: RenderStack) => void,
                 scrollOnNextUpdate: (point: Point) => void,
                 fetchStableId: StableIdProvider,
-                isRecyclingEnabled: boolean) {
+                isRecyclingEnabled: boolean,
+        preserveVisiblePosition: boolean) {
         //Keeps track of items that need to be rendered in the next render cycle
         this._renderStack = {};
 
@@ -78,6 +80,7 @@ export default class VirtualRenderer {
         this._startKey = 0;
 
         this.onVisibleItemsChanged = null;
+    this._preserveVisiblePosition = preserveVisiblePosition;
     }
 
     public getLayoutDimension(): Dimension {
@@ -371,6 +374,9 @@ export default class VirtualRenderer {
     }
 
     private _onVisibleItemsChanged = (all: number[], now: number[], notNow: number[]): void => {
+    if (this._preserveVisiblePosition && now.length) {
+            this._layoutManager.preparePreservedIndex(now[0]);
+    }
         if (this.onVisibleItemsChanged) {
             this.onVisibleItemsChanged(all, now, notNow);
         }
