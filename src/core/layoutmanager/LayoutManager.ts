@@ -61,8 +61,7 @@ export abstract class LayoutManager {
         indexes: Array<number | undefined>,
         itemCount: number,
     ): void;
-    public abstract isFixed(): boolean;
-    public abstract fixIndex(): number;
+    public abstract preservedIndex(): number;
     public abstract preparePreservedIndex(firstVisibleIndex: number): void;
 }
 
@@ -87,10 +86,7 @@ export class WrapGridLayoutManager extends LayoutManager {
         this._layouts = cachedLayouts ? cachedLayouts : [];
     }
 
-    public isFixed(): boolean {
-        return this._fixIndex > -1;
-    }
-    public fixIndex(): number {
+    public preservedIndex(): number {
         return this._fixIndex;
     }
     public preparePreservedIndex(firstVisibleIndex: number): void {

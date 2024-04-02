@@ -430,7 +430,7 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
                 innerRef={(innerComponents: any) => this._innerComponents = (innerComponents && innerComponents._children) as React.Component[] | null}
                 {...this.props}
                 {...this.props.scrollViewProps}
-                fixIndex={layoutManager ? layoutManager.fixIndex() : -1}
+                preservedIndex={layoutManager ? layoutManager.preservedIndex() : -1}
                 onScroll={this._onScroll}
                 onMomentumScrollEnd={this._onMomentumScrollEnd}
                 onSizeChanged={this._onSizeChanged}
@@ -809,6 +809,7 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
         this._processOnEndReached();
 
         this._baseOffset = offsetY;
+        // WIP -- jumps on scroll to end?
         // WIP -- check boundary
         // if ((all.length === 0) || (all[0] === 0) || (all[all.length - 1] === this._params.itemCount - 1)) {
         //     _waitRefixLayout();

@@ -63,7 +63,7 @@ export default class ScrollComponent extends BaseScrollComponent {
             renderAheadOffset: this.props.renderAheadOffset,
             windowSize: (this.props.isHorizontal ? this._width : this._height) + this.props.renderAheadOffset,
             innerRef: this.props.innerRef,
-            fixIndex: this.props.fixIndex,
+            preservedIndex: this.props.preservedIndex,
         };
         //TODO:Talha
         // const {
