@@ -62,6 +62,8 @@ export default class ScrollComponent extends BaseScrollComponent {
             scrollOffset : this._offset,
             renderAheadOffset: this.props.renderAheadOffset,
             windowSize: (this.props.isHorizontal ? this._width : this._height) + this.props.renderAheadOffset,
+            innerRef: this.props.innerRef,
+            fixIndex: this.props.fixIndex,
         };
         //TODO:Talha
         // const {
@@ -83,6 +85,7 @@ export default class ScrollComponent extends BaseScrollComponent {
                 {...this.props}
                 horizontal={this.props.isHorizontal}
                 onScroll={this._onScroll}
+                onMomentumScrollEnd={this._onMomentumScrollEnd}
                 onLayout={(!this._isSizeChangedCalledOnce || this.props.canChangeSize) ? this._onLayout : this.props.onLayout}>
                 <View style={{ flexDirection: this.props.isHorizontal ? "row" : "column" }}>
                     {renderContentContainer(contentContainerProps, this.props.children)}
@@ -94,7 +97,8 @@ export default class ScrollComponent extends BaseScrollComponent {
 
     private _defaultContainer(props: object, children: React.ReactNode): React.ReactNode | null {
         return (
-            <View {...props}>
+	    // @ts-ignore
+            <View ref={props.innerRef} {...props}>
                 {children}
             </View>
         );
@@ -109,6 +113,15 @@ export default class ScrollComponent extends BaseScrollComponent {
             this._offset = this.props.isHorizontal ? contentOffset.x : contentOffset.y;
             // @ts-ignore
             this.props.onScroll(contentOffset.x, contentOffset.y, event);
+        }
+    }
+
+    private _onMomentumScrollEnd = (event?: any): void => {
+        if (event) {
+            // @ts-ignore
+            const contentOffset = event.nativeEvent.contentOffset;
+            // @ts-ignore
+            this.props.onMomentumScrollEnd(contentOffset.x, contentOffset.y, event);
         }
     }
 

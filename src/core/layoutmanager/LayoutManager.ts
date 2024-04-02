@@ -2,6 +2,8 @@
  * Computes the positions and dimensions of items that will be rendered by the list. The output from this is utilized by viewability tracker to compute the
  * lists of visible/hidden item.
  */
+import * as React from "react";
+import BaseScrollComponent from "../scrollcomponent/BaseScrollComponent";
 import { Dimension, LayoutProvider } from "../dependencies/LayoutProvider";
 import CustomError from "../exceptions/CustomError";
 
@@ -52,9 +54,15 @@ export abstract class LayoutManager {
     //Recompute layouts from given index, compute heavy stuff should be here
     public abstract relayoutFromIndex(startIndex: number, itemCount: number): void;
 
+    public abstract refix(
+        scrollComponent: BaseScrollComponent,
+        innerComponents: React.Component[],
+        baseOffset: number,
+        indexes: Array<number | undefined>,
+        itemCount: number,
+    ): void;
     public abstract isFixed(): boolean;
-    public abstract setShouldRefix(shouldRefix: boolean): void;
-    public abstract getRefixOffset(): number;
+    public abstract fixIndex(): number;
     public abstract preparePreservedIndex(firstVisibleIndex: number): void;
 }
 
@@ -67,11 +75,7 @@ export class WrapGridLayoutManager extends LayoutManager {
     private _layouts: Layout[];
 
     private _anchorCount: number = 0;
-
     private _fixIndex: number = -1;
-
-    private _shouldRefix: boolean = false;
-    private _refixOffset: number = 0;
 
     constructor(layoutProvider: LayoutProvider, renderWindowSize: Dimension, isHorizontal: boolean = false, cachedLayouts?: Layout[]) {
         super();
@@ -86,11 +90,8 @@ export class WrapGridLayoutManager extends LayoutManager {
     public isFixed(): boolean {
         return this._fixIndex > -1;
     }
-    public setShouldRefix(shouldRefix: boolean): void {
-        this._shouldRefix = shouldRefix;
-    }
-    public getRefixOffset(): number {
-        return this._refixOffset;
+    public fixIndex(): number {
+        return this._fixIndex;
     }
     public preparePreservedIndex(firstVisibleIndex: number): void {
         if ((this._fixIndex > -1) || (firstVisibleIndex >= this._anchorCount)) {
@@ -122,7 +123,7 @@ export class WrapGridLayoutManager extends LayoutManager {
         if (layout) {
             if ((!layout.isOverridden) && index === this._anchorCount) {
                 let i = this._anchorCount;
-                while (this._layouts[i + 1].isOverridden) {
+                while (this._layouts[i + 1] && this._layouts[i + 1].isOverridden) {
                     i++;
                 }
                 this._anchorCount = i + 1;
@@ -144,8 +145,6 @@ export class WrapGridLayoutManager extends LayoutManager {
 
     //TODO:Talha laziliy calculate in future revisions
     public relayoutFromIndex(startIndex: number, itemCount: number): void {
-        this._refixOffset = 0;
-
         startIndex = this._locateFirstNeighbourIndex(startIndex);
         let startX = 0;
         let startY = 0;
@@ -160,153 +159,61 @@ export class WrapGridLayoutManager extends LayoutManager {
         let index = startIndex;
 
         if ((startIndex <= this._fixIndex) && (this._fixIndex < oldItemCount)) {
-            if (!this._shouldRefix) {
-                for (; index < Math.min(itemCount, this._fixIndex) - 1; index++) {
-                    oldLayout = this._layouts[index];
-                    const layoutType = this._layoutProvider.getLayoutTypeForIndex(index);
-                    if (oldLayout && oldLayout.isOverridden && oldLayout.type === layoutType) {
-                        itemDim.height = oldLayout.height;
-                        itemDim.width = oldLayout.width;
-                    } else {
-                        this._layoutProvider.setComputedLayout(layoutType, itemDim, index);
-                    }
-                    this.setMaxBounds(itemDim);
-
-                    itemRect = this._layouts[index];
-                    itemRect.type = layoutType;
-                    itemRect.width = itemDim.width;
-                    itemRect.height = itemDim.height;
-                }
-
+            for (; index < Math.min(itemCount - 1, this._fixIndex); index++) {
                 oldLayout = this._layouts[index];
-                const fixLayoutType = this._layoutProvider.getLayoutTypeForIndex(index);
-                if (oldLayout && oldLayout.isOverridden && oldLayout.type === fixLayoutType) {
+                const layoutType = this._layoutProvider.getLayoutTypeForIndex(index);
+                if (oldLayout && oldLayout.isOverridden && oldLayout.type === layoutType) {
                     itemDim.height = oldLayout.height;
                     itemDim.width = oldLayout.width;
                 } else {
-                    this._layoutProvider.setComputedLayout(fixLayoutType, itemDim, index);
+                    this._layoutProvider.setComputedLayout(layoutType, itemDim, index);
                 }
                 this.setMaxBounds(itemDim);
 
                 itemRect = this._layouts[index];
-                itemRect.type = fixLayoutType;
+                itemRect.type = layoutType;
                 itemRect.width = itemDim.width;
                 itemRect.height = itemDim.height;
+            }
 
-                if (this._isHorizontal) {
-                    startY += itemDim.height;
-                } else {
-                    startX += itemDim.width;
-                }
-
-                // fix backwards
-                let fixY = itemRect.y;
-                for (let i = index - 1; i >= 0; i --) {
-                    fixY -= this._layouts[i].height;
-                    if (this._layouts[i].y === fixY) {
-                            break;
-                    } else {
-                            this._layouts[i].y = fixY;
-                    }
-                }
-
-                // set loop state as if looped until index
-                maxBound = itemDim.height;
-
-                const startVal = this._layouts[index];
-                startX = startVal.x;
-                startY = startVal.y;
-                this._pointDimensionsToRect(startVal);
+            oldLayout = this._layouts[index];
+            const fixLayoutType = this._layoutProvider.getLayoutTypeForIndex(index);
+            if (oldLayout && oldLayout.isOverridden && oldLayout.type === fixLayoutType) {
+                itemDim.height = oldLayout.height;
+                itemDim.width = oldLayout.width;
             } else {
-                const startVal = this._layouts[startIndex];
-                startX = startVal.x;
-                startY = startVal.y;
-                this._pointDimensionsToRect(startVal);
+                this._layoutProvider.setComputedLayout(fixLayoutType, itemDim, index);
+            }
+            this.setMaxBounds(itemDim);
 
-                for (; index < Math.min(itemCount, this._fixIndex) - 1; index++) {
-                    oldLayout = this._layouts[index];
-                    const layoutType = this._layoutProvider.getLayoutTypeForIndex(index);
-                    if (oldLayout && oldLayout.isOverridden && oldLayout.type === layoutType) {
-                        itemDim.height = oldLayout.height;
-                        itemDim.width = oldLayout.width;
-                    } else {
-                        this._layoutProvider.setComputedLayout(layoutType, itemDim, index);
-                    }
-                    this.setMaxBounds(itemDim);
-                    if (!this._checkBounds(startX, startY, itemDim, this._isHorizontal)) {
-                        if (this._isHorizontal) {
-                            startX += maxBound;
-                            startY = 0;
-                            this._totalWidth += maxBound;
-                        } else {
-                            startX = 0;
-                            startY += maxBound;
-                            this._totalHeight += maxBound;
-                        }
-                        maxBound = 0;
-                    }
+            itemRect = this._layouts[index];
+            itemRect.type = fixLayoutType;
+            itemRect.width = itemDim.width;
+            itemRect.height = itemDim.height;
 
-                    maxBound = this._isHorizontal ? Math.max(maxBound, itemDim.width) : Math.max(maxBound, itemDim.height);
-
-                    itemRect = this._layouts[index];
-                    itemRect.x = startX;
-                    itemRect.y = startY;
-                    itemRect.type = layoutType;
-                    itemRect.width = itemDim.width;
-                    itemRect.height = itemDim.height;
-
-                    if (this._isHorizontal) {
-                        startY += itemDim.height;
-                    } else {
-                        startX += itemDim.width;
-                    }
-                }
-
-                oldLayout = this._layouts[index];
-                const fixLayoutType = this._layoutProvider.getLayoutTypeForIndex(index);
-                if (oldLayout && oldLayout.isOverridden && oldLayout.type === fixLayoutType) {
-                    itemDim.height = oldLayout.height;
-                    itemDim.width = oldLayout.width;
+            // fix backwards
+            let fixY = itemRect.y;
+            let i = index - 1;
+            for (; i >= startIndex; i --) {
+                fixY -= this._layouts[i].height;
+                this._layouts[i].y = fixY;
+            }
+            for (; i >= 0; i --) {
+                fixY -= this._layouts[i].height;
+                if (this._layouts[i].y === fixY) {
+                        break;
                 } else {
-                    this._layoutProvider.setComputedLayout(fixLayoutType, itemDim, index);
-                }
-                this.setMaxBounds(itemDim);
-                if (!this._checkBounds(startX, startY, itemDim, this._isHorizontal)) {
-                    if (this._isHorizontal) {
-                        startX += maxBound;
-                        startY = 0;
-                        this._totalWidth += maxBound;
-                    } else {
-                        startX = 0;
-                        startY += maxBound;
-                        this._totalHeight += maxBound;
-                    }
-                    maxBound = 0;
-                }
-
-                itemRect = this._layouts[index];
-
-                maxBound = this._isHorizontal ? Math.max(maxBound, itemDim.width) : Math.max(maxBound, itemDim.height);
-
-                // report diff
-                this._refixOffset = startY - itemRect.y;
-                // reset fix
-                if (this._fixIndex < this._anchorCount) {
-                    this._fixIndex = -1;
-                }
-
-                itemRect.x = startX;
-                itemRect.y = startY;
-                itemRect.type = fixLayoutType;
-                itemRect.width = itemDim.width;
-                itemRect.height = itemDim.height;
-
-                if (this._isHorizontal) {
-                    startY += itemDim.height;
-                } else {
-                    startX += itemDim.width;
+                        this._layouts[i].y = fixY;
                 }
             }
+
+            // set loop state as if looped until index
+            maxBound = itemDim.height;
+
+            const startVal = this._layouts[index];
+            startX = itemDim.width;
+            startY = startVal.y;
+            this._pointDimensionsToRect(startVal);
 
             index = index + 1;
         } else {
@@ -366,8 +273,38 @@ export class WrapGridLayoutManager extends LayoutManager {
             this._layouts.splice(itemCount, oldItemCount - itemCount);
         }
         this._setFinalDimensions(maxBound);
+    }
 
-        this._shouldRefix = false;
+    public refix(
+        scrollComponent: BaseScrollComponent,
+        innerComponents: React.Component[],
+        baseOffset: number,
+        indexes: Array<number | undefined>,
+        itemCount: number,
+    ): void {
+        const refixOffset = - this._layouts[0].y;
+
+        if (refixOffset !== 0) {
+            for (let i = 0; i < itemCount; i++) {
+                this._layouts[i].y += refixOffset;
+            }
+            this._totalHeight += refixOffset;
+
+            for (let i = 0; i < indexes.length; i++) {
+                const index = indexes[i];
+                if (index !== undefined) {
+                    const y = this._layouts[index].y;
+                    // @ts-ignore
+                    innerComponents[i].setNativeProps({ style: { top: y } });
+                }
+            }
+            scrollComponent.scrollTo(0, baseOffset + refixOffset, false);
+        }
+
+        // reset fix
+        if (this._fixIndex < this._anchorCount) {
+            this._fixIndex = -1;
+        }
     }
 
     private _pointDimensionsToRect(itemRect: Layout): void {

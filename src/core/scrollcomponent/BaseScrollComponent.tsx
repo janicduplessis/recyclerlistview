@@ -9,6 +9,8 @@ export interface ScrollComponentProps {
     contentWidth: number;
     canChangeSize?: boolean;
     externalScrollView?: { new(props: ScrollViewDefaultProps): BaseScrollView };
+    fixIndex?: number;
+    innerRef: any;
     isHorizontal?: boolean;
     renderFooter?: () => JSX.Element | JSX.Element[] | null;
     scrollThrottle?: number;

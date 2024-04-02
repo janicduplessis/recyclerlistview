@@ -34,6 +34,7 @@ import BaseScrollComponent from "./scrollcomponent/BaseScrollComponent";
 import BaseScrollView, { ScrollEvent, ScrollViewDefaultProps } from "./scrollcomponent/BaseScrollView";
 import { TOnItemStatusChanged, WindowCorrection } from "./ViewabilityTracker";
 import VirtualRenderer, { RenderStack, RenderStackItem, RenderStackParams } from "./VirtualRenderer";
+import ViewabilityTracker from "./ViewabilityTracker";
 import ItemAnimator, { BaseItemAnimator } from "./ItemAnimator";
 import { DebugHandlers } from "..";
 import { ComponentCompat } from "../utils/ComponentCompat";
@@ -168,12 +169,12 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
     private _tempDim: Dimension = { height: 0, width: 0 };
     private _initialOffset = 0;
     private _cachedLayouts?: Layout[];
+    // to be pedantic, _scrollComponent, _innerComponents are not `React.Component`s
     private _scrollComponent: BaseScrollComponent | null = null;
+    private _innerComponents: React.Component[] | null = null;
     private _windowCorrectionConfig: WindowCorrectionConfig;
 
-    private _shouldRefix: boolean = false;
     private _baseOffset: number = 0;
-    private _refixOffset: number = 0;
     private onVisibleIndicesChanged: ((all: number[], now: number[], notNow: number[]) => void) | null = null;
 
     //If the native content container is used, then positions of the list items are changed on the native side. The animated library used
@@ -421,17 +422,17 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
         //     ...props,
         // } = this.props;
 
-        if (this._refixOffset && this._scrollComponent) {
-            this._scrollComponent.scrollTo(0, this._refixOffset, false);
-            this._refixOffset = 0;
-        }
+        const layoutManager = this._virtualRenderer.getLayoutManager();
 
         return (
             <ScrollComponent
                 ref={(scrollComponent) => this._scrollComponent = scrollComponent as BaseScrollComponent | null}
+                innerRef={(innerComponents: any) => this._innerComponents = (innerComponents && innerComponents._children) as React.Component[] | null}
                 {...this.props}
                 {...this.props.scrollViewProps}
+                fixIndex={layoutManager ? layoutManager.fixIndex() : -1}
                 onScroll={this._onScroll}
+                onMomentumScrollEnd={this._onMomentumScrollEnd}
                 onSizeChanged={this._onSizeChanged}
                 contentHeight={this._initComplete ? this._virtualRenderer.getLayoutDimension().height : 0}
                 contentWidth={this._initComplete ? this._virtualRenderer.getLayoutDimension().width : 0}
@@ -551,22 +552,6 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
                 this._relayoutReqIndex = -1;
                 this._immediateRefreshViewability();
             }
-        } else if (this._shouldRefix) {
-            const layoutManager = this._virtualRenderer.getLayoutManager();
-            if (layoutManager) {
-                const dataProviderSize = newProps.dataProvider.getSize();
-
-                layoutManager.setShouldRefix(true);
-                layoutManager.relayoutFromIndex(0, dataProviderSize);
-
-                this._refixOffset = this._baseOffset + layoutManager.getRefixOffset();
-
-                this._immediateRefreshViewability();
-            }
-            this._shouldRefix = false;
-        }
-        if (this._shouldRefix) {
-            this._waitUnfixLayout();
         }
     }
 
@@ -787,17 +772,31 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
         return renderedItems;
     }
 
-    private _waitUnfixLayout = debounce(() => {
-        this._unfixLayout();
-    }, 500);
-    private _unfixLayout = () => {
-        //Cannot be null here
-        const layoutManager: LayoutManager = this._virtualRenderer.getLayoutManager() as LayoutManager;
-        if (layoutManager.isFixed()) {
-            this._shouldRefix = true;
-            this._immediateStateRefresh();
+    private _waitRefixLayout = debounce(() => {
+        const layoutManager = this._virtualRenderer.getLayoutManager();
+        const viewabilityTracker = this._virtualRenderer.getViewabilityTracker() as ViewabilityTracker;
+        const dataProviderSize = this.props.dataProvider.getSize();
+        const { _scrollComponent, _innerComponents } = this;
+
+        if (layoutManager && viewabilityTracker && _scrollComponent && _innerComponents) {
+            const indexes: (number | undefined)[] = [];
+            for (const key in this.state.renderStack) {
+                if (this.state.renderStack.hasOwnProperty(key)) {
+                    indexes.push(this.state.renderStack[key].dataIndex);
+                }
+            }
+
+            layoutManager.refix(
+                _scrollComponent,
+                _innerComponents,
+                this._baseOffset,
+                indexes,
+                dataProviderSize
+            );
+        } else {
+            this._waitRefixLayout();
         }
-    };
+    }, 500);
 
     private _onScroll = (offsetX: number, offsetY: number, rawEvent: ScrollEvent): void => {
         // correction to be positive to shift offset upwards; negative to push offset downwards.
@@ -810,16 +809,24 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
         this._processOnEndReached();
 
         this._baseOffset = offsetY;
-        this._waitUnfixLayout();
+        // WIP -- check boundary
+        // if ((all.length === 0) || (all[0] === 0) || (all[all.length - 1] === this._params.itemCount - 1)) {
+        //     _waitRefixLayout();
+        //     setTimeout(() => {
+        //         _waitRefixLayout.flush();
+        //     }, 0);
+        // }
+
+        this._waitRefixLayout();
+    }
+
+    // WIP -- implement events for both android and ios
+    private _onMomentumScrollEnd = (offsetX: number, offsetY: number, rawEvent: ScrollEvent): void => {
+        this._baseOffset = offsetY;
+        this._waitRefixLayout();
     }
 
     private _onVisibleIndicesChanged = (all: number[], now: number[], notNow: number[]): void => {
-        if ((now.length === 0) || (now[0] === 0) || (now[now.length - 1] === this._params.itemCount - 1)) {
-            setTimeout(() => {
-                this._unfixLayout();
-            }, 0);
-        }
-
         if (this.onVisibleIndicesChanged) {
             this.onVisibleIndicesChanged!(all, now, notNow);
         }
