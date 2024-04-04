@@ -18,6 +18,7 @@
  * TODO: Observe size changes on web to optimize for reflowability
  * TODO: Solve //TSI
  */
+import throttle = require("lodash.throttle");
 import debounce = require("lodash.debounce");
 import * as PropTypes from "prop-types";
 import * as React from "react";
@@ -169,12 +170,13 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
     private _tempDim: Dimension = { height: 0, width: 0 };
     private _initialOffset = 0;
     private _cachedLayouts?: Layout[];
-    // to be pedantic, _scrollComponent, _innerComponents are not `React.Component`s
+    // to be pedantic, _scrollComponent, _innerScrollComponent are not `React.Component`s
     private _scrollComponent: BaseScrollComponent | null = null;
-    private _innerComponents: React.Component[] | null = null;
+    private _innerScrollComponent: React.Component | null = null;
     private _windowCorrectionConfig: WindowCorrectionConfig;
 
-    private _baseOffset: number = 0;
+    private _scrollOffset: number = 0;
+    private _scrollHeight: number = 0;
     private onVisibleIndicesChanged: ((all: number[], now: number[], notNow: number[]) => void) | null = null;
 
     //If the native content container is used, then positions of the list items are changed on the native side. The animated library used
@@ -345,6 +347,7 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
                 y = useWindowCorrection ? y - this._windowCorrectionConfig.value.windowShift : y;
             }
             this._scrollComponent.scrollTo(x, y, animate);
+            // this._scrollEvent(x, y, { nativeEvent: { contentOffset: { x: x, y: y } } }, false);
         }
     }
 
@@ -426,12 +429,14 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
 
         return (
             <ScrollComponent
-                ref={(scrollComponent) => this._scrollComponent = scrollComponent as BaseScrollComponent | null}
-                innerRef={(innerComponents: any) => this._innerComponents = (innerComponents && innerComponents._children) as React.Component[] | null}
+                ref={(scrollComponent) => {if (scrollComponent) {this._scrollComponent = scrollComponent as BaseScrollComponent | null}}}
+                innerRef={(innerScrollComponent: any) => {if (innerScrollComponent) {this._innerScrollComponent = innerScrollComponent as React.Component | null}}}
                 {...this.props}
                 {...this.props.scrollViewProps}
                 preservedIndex={layoutManager ? layoutManager.preservedIndex() : -1}
+                scrollEventThrottle={16}
                 onScroll={this._onScroll}
+                onScrollEndDrag={this._onScrollEndDrag}
                 onMomentumScrollEnd={this._onMomentumScrollEnd}
                 onSizeChanged={this._onSizeChanged}
                 contentHeight={this._initComplete ? this._virtualRenderer.getLayoutDimension().height : 0}
@@ -776,9 +781,9 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
         const layoutManager = this._virtualRenderer.getLayoutManager();
         const viewabilityTracker = this._virtualRenderer.getViewabilityTracker() as ViewabilityTracker;
         const dataProviderSize = this.props.dataProvider.getSize();
-        const { _scrollComponent, _innerComponents } = this;
+        const { _scrollOffset, _scrollHeight, _scrollComponent, _innerScrollComponent } = this;
 
-        if (layoutManager && viewabilityTracker && _scrollComponent && _innerComponents) {
+        if (layoutManager && viewabilityTracker && _scrollHeight && _scrollComponent && _innerScrollComponent) {
             const indexes: (number | undefined)[] = [];
             for (const key in this.state.renderStack) {
                 if (this.state.renderStack.hasOwnProperty(key)) {
@@ -788,44 +793,73 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
 
             layoutManager.refix(
                 _scrollComponent,
-                _innerComponents,
-                this._baseOffset,
+                _innerScrollComponent,
+                _scrollHeight,
+                _scrollOffset,
                 indexes,
-                dataProviderSize
-            );
-        } else {
-            this._waitRefixLayout();
-        }
-    }, 500);
+                dataProviderSize,
+                this._virtualRenderer,
+                (scrollHeight) => {
+                    this._scrollHeight = scrollHeight;
+
+                    this._waitRefixLayout();
+                    this._waitRefixLayout.flush();
+                },
+            )
+        } 
+
+    }, 1500);
 
     private _onScroll = (offsetX: number, offsetY: number, rawEvent: ScrollEvent): void => {
-        // correction to be positive to shift offset upwards; negative to push offset downwards.
-        // extracting the correction value from logical offset and updating offset of virtual renderer.
-        this._virtualRenderer.updateOffset(offsetX, offsetY, true, this._getWindowCorrection(offsetX, offsetY, this.props));
+        this._scrollEvent(offsetX, offsetY, rawEvent, true);
+    }
 
-        if (this.props.onScroll) {
+    private _onScrollEndDrag = (offsetX: number, offsetY: number, rawEvent: ScrollEvent): void => {
+        this._scrollEvent(offsetX, offsetY, rawEvent, false);
+    }
+
+    private _onMomentumScrollEnd = (offsetX: number, offsetY: number, rawEvent: ScrollEvent): void => {
+        this._scrollEvent(offsetX, offsetY, rawEvent, false);
+    }
+
+    private _scrollEvent = (offsetX: number, offsetY: number, rawEvent: ScrollEvent, isOnScroll: boolean): void => {
+        this._scrollUpdate(offsetX, offsetY);
+
+        if (isOnScroll && this.props.onScroll) {
             this.props.onScroll(rawEvent, offsetX, offsetY);
         }
         this._processOnEndReached();
 
-        this._baseOffset = offsetY;
-        // WIP -- jumps on scroll to end?
-        // WIP -- check boundary
-        // if ((all.length === 0) || (all[0] === 0) || (all[all.length - 1] === this._params.itemCount - 1)) {
-        //     _waitRefixLayout();
-        //     setTimeout(() => {
-        //         _waitRefixLayout.flush();
-        //     }, 0);
-        // }
+        this._scrollOffset = offsetY;
+
+        const layoutManager = this._virtualRenderer.getLayoutManager();
+        const layouts = layoutManager?.getLayouts();
+        const { nativeEvent } = rawEvent;
+
+        if (layouts && layouts.length && nativeEvent.contentSize && nativeEvent.layoutMeasurement) {
+            const { contentSize, layoutMeasurement } = nativeEvent;
+            const firstLayout = layouts[0];
+            const lastLayout = layouts[layouts.length - 1];
+
+            this._scrollHeight = contentSize.height;
+
+            const minY = Math.max(0, firstLayout.y) - 0.9;
+            const maxY = Math.min(lastLayout.y + lastLayout.height, contentSize.height) - layoutMeasurement.height + 0.9;
+            if (offsetY < minY || offsetY > maxY) {
+                setTimeout(() => {
+                    this._waitRefixLayout.flush();
+                }, 0);
+            }
+        }
 
         this._waitRefixLayout();
     }
 
-    // WIP -- implement events for both android and ios
-    private _onMomentumScrollEnd = (offsetX: number, offsetY: number, rawEvent: ScrollEvent): void => {
-        this._baseOffset = offsetY;
-        this._waitRefixLayout();
-    }
+    private _scrollUpdate = throttle ((offsetX: number, offsetY: number): void => {
+        // correction to be positive to shift offset upwards; negative to push offset downwards.
+        // extracting the correction value from logical offset and updating offset of virtual renderer.
+        this._virtualRenderer.updateOffset(offsetX, offsetY, true, this._getWindowCorrection(offsetX, offsetY, this.props));
+    }, 67)
 
     private _onVisibleIndicesChanged = (all: number[], now: number[], notNow: number[]): void => {
         if (this.onVisibleIndicesChanged) {

@@ -4,6 +4,7 @@
  */
 import * as React from "react";
 import BaseScrollComponent from "../scrollcomponent/BaseScrollComponent";
+import VirtualRenderer from "../VirtualRenderer";
 import { Dimension, LayoutProvider } from "../dependencies/LayoutProvider";
 import CustomError from "../exceptions/CustomError";
 
@@ -56,10 +57,13 @@ export abstract class LayoutManager {
 
     public abstract refix(
         scrollComponent: BaseScrollComponent,
-        innerComponents: React.Component[],
+        innerScrollComponent: React.Component,
+        scrollHeight: number,
         baseOffset: number,
         indexes: Array<number | undefined>,
         itemCount: number,
+        virtualRenderer: VirtualRenderer,
+        retrigger: (height: number) => void,
     ): void;
     public abstract preservedIndex(): number;
     public abstract preparePreservedIndex(firstVisibleIndex: number): void;
@@ -91,6 +95,7 @@ export class WrapGridLayoutManager extends LayoutManager {
     }
     public preparePreservedIndex(firstVisibleIndex: number): void {
         if ((this._fixIndex > -1) || (firstVisibleIndex >= this._anchorCount)) {
+            // WIP -- another option is to only shift upon refix. test it.
             this._fixIndex = firstVisibleIndex;
         }
     }
@@ -273,33 +278,62 @@ export class WrapGridLayoutManager extends LayoutManager {
 
     public refix(
         scrollComponent: BaseScrollComponent,
-        innerComponents: React.Component[],
+        innerScrollComponent: React.Component,
+        scrollHeight: number,
         baseOffset: number,
         indexes: Array<number | undefined>,
         itemCount: number,
+        virtualRenderer: VirtualRenderer,
+        retrigger: (height: number) => void,
     ): void {
         const refixOffset = - this._layouts[0].y;
 
-        if (refixOffset !== 0) {
-            for (let i = 0; i < itemCount; i++) {
-                this._layouts[i].y += refixOffset;
-            }
-            this._totalHeight += refixOffset;
+        // if the content height is not as tall as the scroll destination, scrollTo will fail
+        // so, we must first set the height the content before we do the rest of refix
+        if (refixOffset > 0 && scrollHeight < Math.min(baseOffset, this._totalHeight) + refixOffset) {
+            // @ts-ignore
+            innerScrollComponent.setNativeProps({ style: { height: this._totalHeight + refixOffset } });
+            // @ts-ignore
+            innerScrollComponent.measure((x, y, width, height, pageX, pageY) => {
+                retrigger(height);
+            });
+        }
+        else {
+            if (refixOffset !== 0) {
+                for (let i = 0; i < itemCount; i++) {
+                    this._layouts[i].y += refixOffset;
+                }
+                this._totalHeight += refixOffset;
 
-            for (let i = 0; i < indexes.length; i++) {
-                const index = indexes[i];
-                if (index !== undefined) {
-                    const y = this._layouts[index].y;
-                    // @ts-ignore
-                    innerComponents[i].setNativeProps({ style: { top: y } });
+                // @ts-ignore
+                innerScrollComponent.setNativeProps({ style: { height: this._totalHeight } });
+
+                for (let i = 0; i < indexes.length; i++) {
+                    const index = indexes[i];
+                    if (index !== undefined) {
+                        const y = this._layouts[index].y;
+                        // @ts-ignore
+                        innerScrollComponent._children[i].setNativeProps({ style: { top: y } });
+                    }
+                }
+                scrollComponent.scrollTo(0, baseOffset + refixOffset, false);
+
+                const viewabilityTracker = virtualRenderer.getViewabilityTracker();
+                if (viewabilityTracker) {
+                    (viewabilityTracker as any)._currentOffset += refixOffset;
+                    (viewabilityTracker as any)._maxOffset += refixOffset;
+                    (viewabilityTracker as any)._visibleWindow.start += refixOffset;
+                    (viewabilityTracker as any)._visibleWindow.end += refixOffset;
+                    (viewabilityTracker as any)._engagedWindow.start += refixOffset;
+                    (viewabilityTracker as any)._engagedWindow.end += refixOffset;
+                    (viewabilityTracker as any)._actualOffset += refixOffset;
                 }
             }
-            scrollComponent.scrollTo(0, baseOffset + refixOffset, false);
-        }
 
-        // reset fix
-        if (this._fixIndex < this._anchorCount) {
-            this._fixIndex = -1;
+            // reset fix
+            if (this._fixIndex < this._anchorCount) {
+                this._fixIndex = -1;
+            }
         }
     }
 

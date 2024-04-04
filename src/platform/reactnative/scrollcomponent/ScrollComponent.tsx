@@ -85,6 +85,7 @@ export default class ScrollComponent extends BaseScrollComponent {
                 {...this.props}
                 horizontal={this.props.isHorizontal}
                 onScroll={this._onScroll}
+                onScrollEndDrag={this._onScrollEndDrag}
                 onMomentumScrollEnd={this._onMomentumScrollEnd}
                 onLayout={(!this._isSizeChangedCalledOnce || this.props.canChangeSize) ? this._onLayout : this.props.onLayout}>
                 <View style={{ flexDirection: this.props.isHorizontal ? "row" : "column" }}>
@@ -113,6 +114,15 @@ export default class ScrollComponent extends BaseScrollComponent {
             this._offset = this.props.isHorizontal ? contentOffset.x : contentOffset.y;
             // @ts-ignore
             this.props.onScroll(contentOffset.x, contentOffset.y, event);
+        }
+    }
+
+    private _onScrollEndDrag = (event?: any): void => {
+        if (event) {
+            // @ts-ignore
+            const contentOffset = event.nativeEvent.contentOffset;
+            // @ts-ignore
+            this.props.onScrollEndDrag(contentOffset.x, contentOffset.y, event);
         }
     }
 
