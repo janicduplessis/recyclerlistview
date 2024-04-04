@@ -2,6 +2,7 @@
  * Computes the positions and dimensions of items that will be rendered by the list. The output from this is utilized by viewability tracker to compute the
  * lists of visible/hidden item.
  */
+import throttle = require("lodash.throttle");
 import * as React from "react";
 import BaseScrollComponent from "../scrollcomponent/BaseScrollComponent";
 import VirtualRenderer from "../VirtualRenderer";
@@ -94,11 +95,13 @@ export class WrapGridLayoutManager extends LayoutManager {
         return this._fixIndex;
     }
     public preparePreservedIndex(firstVisibleIndex: number): void {
+        this._preparePreservedIndex(firstVisibleIndex);
+    }
+    private _preparePreservedIndex = throttle ((firstVisibleIndex: number): void => {
         if ((this._fixIndex > -1) || (firstVisibleIndex >= this._anchorCount)) {
-            // WIP -- another option is to only shift upon refix. test it.
             this._fixIndex = firstVisibleIndex;
         }
-    }
+    }, 200)
 
     public getContentDimension(): Dimension {
         return { height: this._totalHeight, width: this._totalWidth };
