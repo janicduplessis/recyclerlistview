@@ -53,6 +53,7 @@ export default class VirtualRenderer {
     private _dimensions: Dimension | null;
     private _optimizeForAnimations: boolean = false;
     private _preserveVisiblePosition: boolean = false;
+    private _firstVisibleIndex: number = -1;
 
     constructor(renderStackChanged: (renderStack: RenderStack) => void,
                 scrollOnNextUpdate: (point: Point) => void,
@@ -273,7 +274,15 @@ export default class VirtualRenderer {
         }
 
         //Compute active stable ids and stale active keys and resync render stack
-        const preservedIndex = this._layoutManager ? this._layoutManager.preservedIndex() : -1;
+        let preservedIndex = -1;
+        if (this._preserveVisiblePosition) {
+            if (this._layoutManager) {
+                preservedIndex = this._layoutManager.preservedIndex();
+            }
+            if (preservedIndex === -1) {
+                preservedIndex = this._firstVisibleIndex;
+            }
+        }
         let preservedStableId: string | null = null;
         for (const key in this._renderStack) {
             if (this._renderStack.hasOwnProperty(key)) {
@@ -384,8 +393,11 @@ export default class VirtualRenderer {
     }
 
     private _onVisibleItemsChanged = (all: number[], now: number[], notNow: number[]): void => {
-        if (this._preserveVisiblePosition && all.length && this._layoutManager) {
-            this._layoutManager.preparePreservedIndex(all[0]);
+        if (all.length) {
+            this._firstVisibleIndex = all[0];
+            if (this._preserveVisiblePosition && this._layoutManager) {
+                this._layoutManager.preparePreservedIndex(all[0]);
+            }
         }
         if (this.onVisibleItemsChanged) {
             this.onVisibleItemsChanged(all, now, notNow);
