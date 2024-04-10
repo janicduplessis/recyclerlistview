@@ -273,16 +273,26 @@ export default class VirtualRenderer {
         }
 
         //Compute active stable ids and stale active keys and resync render stack
+        const preservedIndex = this._layoutManager ? this._layoutManager.preservedIndex() : -1;
+        let preservedStableId: string | null = null;
         for (const key in this._renderStack) {
             if (this._renderStack.hasOwnProperty(key)) {
                 const index = this._renderStack[key].dataIndex;
+                if (index === preservedIndex) {
+                    preservedStableId = this._fetchStableId(index);
+                }
                 if (!ObjectUtil.isNullOrUndefined(index)) {
                     if (index <= maxIndex) {
                         const stableId = getStableId(index);
-                        activeStableIds[stableId] = 1;
+                        activeStableIds[stableId] = index;
                     }
                 }
             }
+        }
+
+        // If the preserved stable id is still visible, we preserve the position of the stable id
+        if (this._layoutManager && (preservedStableId !== null) && (preservedStableId in activeStableIds)) {
+            this._layoutManager.setPreservedIndex(activeStableIds[preservedStableId]);
         }
 
         //Clean stable id to key map
@@ -292,7 +302,7 @@ export default class VirtualRenderer {
             const key = oldActiveStableIds[i];
             const stableIdItem = this._stableIdToRenderKeyMap[key];
             if (stableIdItem) {
-                if (!activeStableIds[key]) {
+                if (!(key in activeStableIds)) {
                     if (!this._optimizeForAnimations && this._isRecyclingEnabled) {
                         this._recyclePool.putRecycledObject(stableIdItem.type, stableIdItem.key);
                     }

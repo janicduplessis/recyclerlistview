@@ -67,6 +67,7 @@ export abstract class LayoutManager {
         retrigger: (height: number) => void,
     ): void;
     public abstract preservedIndex(): number;
+    public abstract setPreservedIndex(preservedIndex: number): void;
     public abstract preparePreservedIndex(firstVisibleIndex: number): void;
 }
 
@@ -81,6 +82,12 @@ export class WrapGridLayoutManager extends LayoutManager {
     private _anchorCount: number = 0;
     private _fixIndex: number = -1;
 
+    private _preparePreservedIndex = throttle ((firstVisibleIndex: number): void => {
+        if ((this._fixIndex > -1) || (firstVisibleIndex >= this._anchorCount)) {
+            this._fixIndex = firstVisibleIndex;
+        }
+    }, 200);
+
     constructor(layoutProvider: LayoutProvider, renderWindowSize: Dimension, isHorizontal: boolean = false, cachedLayouts?: Layout[]) {
         super();
         this._layoutProvider = layoutProvider;
@@ -94,14 +101,12 @@ export class WrapGridLayoutManager extends LayoutManager {
     public preservedIndex(): number {
         return this._fixIndex;
     }
+    public setPreservedIndex(preservedIndex: number): void {
+        this._fixIndex = preservedIndex;
+    }
     public preparePreservedIndex(firstVisibleIndex: number): void {
         this._preparePreservedIndex(firstVisibleIndex);
     }
-    private _preparePreservedIndex = throttle ((firstVisibleIndex: number): void => {
-        if ((this._fixIndex > -1) || (firstVisibleIndex >= this._anchorCount)) {
-            this._fixIndex = firstVisibleIndex;
-        }
-    }, 200)
 
     public getContentDimension(): Dimension {
         return { height: this._totalHeight, width: this._totalWidth };
@@ -300,8 +305,7 @@ export class WrapGridLayoutManager extends LayoutManager {
             innerScrollComponent.measure((x, y, width, height, pageX, pageY) => {
                 retrigger(height);
             });
-        }
-        else {
+        } else {
             if (refixOffset !== 0) {
                 for (let i = 0; i < itemCount; i++) {
                     this._layouts[i].y += refixOffset;
