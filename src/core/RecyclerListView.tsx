@@ -18,7 +18,6 @@
  * TODO: Observe size changes on web to optimize for reflowability
  * TODO: Solve //TSI
  */
-import throttle = require("lodash.throttle");
 import debounce = require("lodash.debounce");
 import * as PropTypes from "prop-types";
 import * as React from "react";
@@ -855,11 +854,13 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
         this._waitRefixLayout();
     }
 
-    private _scrollUpdate = throttle ((offsetX: number, offsetY: number): void => {
+    // throttling is probably not necessary, since updateOffset had always been called
+    // on every frame in android anyways.
+    private _scrollUpdate = /*throttle (*/(offsetX: number, offsetY: number): void => {
         // correction to be positive to shift offset upwards; negative to push offset downwards.
         // extracting the correction value from logical offset and updating offset of virtual renderer.
         this._virtualRenderer.updateOffset(offsetX, offsetY, true, this._getWindowCorrection(offsetX, offsetY, this.props));
-    }, 67)
+    }/*, 67)*/
 
     private _onVisibleIndicesChanged = (all: number[], now: number[], notNow: number[]): void => {
         if (this.onVisibleIndicesChanged) {
