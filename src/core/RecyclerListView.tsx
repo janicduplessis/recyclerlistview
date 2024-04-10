@@ -777,36 +777,37 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
     }
 
     private _waitRefixLayout = debounce(() => {
-        const layoutManager = this._virtualRenderer.getLayoutManager();
-        const viewabilityTracker = this._virtualRenderer.getViewabilityTracker() as ViewabilityTracker;
-        const dataProviderSize = this.props.dataProvider.getSize();
-        const { _scrollOffset, _scrollHeight, _scrollComponent, _innerScrollComponent } = this;
+        if (this._isMounted) {
+            const layoutManager = this._virtualRenderer.getLayoutManager();
+            const viewabilityTracker = this._virtualRenderer.getViewabilityTracker() as ViewabilityTracker;
+            const dataProviderSize = this.props.dataProvider.getSize();
+            const { _scrollOffset, _scrollHeight, _scrollComponent, _innerScrollComponent } = this;
 
-        if (layoutManager && viewabilityTracker && _scrollHeight && _scrollComponent && _innerScrollComponent) {
-            const indexes: (number | undefined)[] = [];
-            for (const key in this.state.renderStack) {
-                if (this.state.renderStack.hasOwnProperty(key)) {
-                    indexes.push(this.state.renderStack[key].dataIndex);
+            if (layoutManager && viewabilityTracker && _scrollHeight && _scrollComponent && _innerScrollComponent) {
+                const indexes: (number | undefined)[] = [];
+                for (const key in this.state.renderStack) {
+                    if (this.state.renderStack.hasOwnProperty(key)) {
+                        indexes.push(this.state.renderStack[key].dataIndex);
+                    }
                 }
-            }
 
-            layoutManager.refix(
-                _scrollComponent,
-                _innerScrollComponent,
-                _scrollHeight,
-                _scrollOffset,
-                indexes,
-                dataProviderSize,
-                this._virtualRenderer,
-                (scrollHeight) => {
-                    this._scrollHeight = scrollHeight;
+                layoutManager.refix(
+                    _scrollComponent,
+                    _innerScrollComponent,
+                    _scrollHeight,
+                    _scrollOffset,
+                    indexes,
+                    dataProviderSize,
+                    this._virtualRenderer,
+                    (scrollHeight) => {
+                        this._scrollHeight = scrollHeight;
 
-                    this._waitRefixLayout();
-                    this._waitRefixLayout.flush();
-                },
-            )
-        } 
-
+                        this._waitRefixLayout();
+                        this._waitRefixLayout.flush();
+                    },
+                )
+            } 
+        }
     }, 1500);
 
     private _onScroll = (offsetX: number, offsetY: number, rawEvent: ScrollEvent): void => {
