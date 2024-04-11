@@ -67,8 +67,9 @@ export abstract class LayoutManager {
         retrigger: (height: number) => void,
     ): void;
     public abstract preservedIndex(): number;
-    public abstract setPreservedIndex(preservedIndex: number): void;
     public abstract preparePreservedIndex(firstVisibleIndex: number): void;
+    public abstract shiftPreservedIndex(index: number, shiftPreservedIndex: number): void;
+    public abstract shiftLayouts(indexOffset: number): void;
 }
 
 export class WrapGridLayoutManager extends LayoutManager {
@@ -81,6 +82,7 @@ export class WrapGridLayoutManager extends LayoutManager {
 
     private _anchorCount: number = 0;
     private _fixIndex: number = -1;
+    private _pendingFixY: number | undefined = undefined;
 
     private _preparePreservedIndex = throttle ((firstVisibleIndex: number): void => {
         if ((this._fixIndex > -1) || (firstVisibleIndex >= this._anchorCount)) {
@@ -101,11 +103,33 @@ export class WrapGridLayoutManager extends LayoutManager {
     public preservedIndex(): number {
         return this._fixIndex;
     }
-    public setPreservedIndex(preservedIndex: number): void {
-        this._fixIndex = preservedIndex;
-    }
     public preparePreservedIndex(firstVisibleIndex: number): void {
         this._preparePreservedIndex(firstVisibleIndex);
+    }
+    public shiftPreservedIndex(index: number, shiftPreservedIndex: number): void {
+        this._fixIndex = shiftPreservedIndex;
+        this._pendingFixY = this._layouts[index].y;
+        this._preparePreservedIndex.cancel();
+    }
+    public shiftLayouts(indexOffset: number): void {
+        // shift existing layout by an offset
+        // this is called when data changes
+        // purpose is: assuming that most layout sizes have not changed, we want to keep existing
+        // values of layout sizes already obtained, so that we prevent layout thrashing
+        // this is especially relevant the data change happens after many layouts have been overridden
+        // so the layouting trusts the values, but if all indices are shifted, they could be all wrong
+
+        // fill in invalid placeholder values; these will be properly calculated during relayout
+        if (indexOffset > 0) {
+            const layoutCount = this._layouts.length;
+            const placeholderLayouts = [];
+            for (let i = 0; i < indexOffset; i++) {
+                placeholderLayouts.push({ x: 0, y: 0, height: 0, width: 0, type: 0 });
+            }
+            this._layouts.splice(0, 0, ...placeholderLayouts);
+        } else if (indexOffset < 0) {
+            this._layouts.splice(0, - indexOffset);
+        }
     }
 
     public getContentDimension(): Dimension {
@@ -201,6 +225,10 @@ export class WrapGridLayoutManager extends LayoutManager {
             itemRect.height = itemDim.height;
 
             // fix backwards
+            if (this._pendingFixY !== undefined) {
+                itemRect.y = this._pendingFixY;
+                this._pendingFixY = undefined;
+            }
             let fixY = itemRect.y;
             let i = index - 1;
             for (; i >= startIndex; i --) {

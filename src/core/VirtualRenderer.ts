@@ -46,20 +46,26 @@ export default class VirtualRenderer {
     private _startKey: number;
     private _layoutProvider: BaseLayoutProvider = TSCast.cast<BaseLayoutProvider>(null); //TSI
     private _recyclePool: RecycleItemPool = TSCast.cast<RecycleItemPool>(null); //TSI
+    private _preserveVisiblePosition: boolean;
+    private _startEdgePreserved: boolean;
+    private _edgeVisibleThreshold: number;
+    private _shiftPreservedLayouts: boolean;
 
     private _params: RenderStackParams | null;
     private _layoutManager: LayoutManager | null = null;
     private _viewabilityTracker: ViewabilityTracker | null = null;
     private _dimensions: Dimension | null;
     private _optimizeForAnimations: boolean = false;
-    private _preserveVisiblePosition: boolean = false;
     private _firstVisibleIndex: number = -1;
 
     constructor(renderStackChanged: (renderStack: RenderStack) => void,
                 scrollOnNextUpdate: (point: Point) => void,
                 fetchStableId: StableIdProvider,
                 isRecyclingEnabled: boolean,
-                preserveVisiblePosition: boolean) {
+                preserveVisiblePosition: boolean,
+                startEdgePreserved: boolean,
+                edgeVisibleThreshold: number,
+                shiftPreservedLayouts: boolean) {
         //Keeps track of items that need to be rendered in the next render cycle
         this._renderStack = {};
 
@@ -82,6 +88,9 @@ export default class VirtualRenderer {
 
         this.onVisibleItemsChanged = null;
         this._preserveVisiblePosition = preserveVisiblePosition;
+        this._startEdgePreserved = startEdgePreserved;
+        this._edgeVisibleThreshold = edgeVisibleThreshold;
+        this._shiftPreservedLayouts = shiftPreservedLayouts;
     }
 
     public getLayoutDimension(): Dimension {
@@ -260,7 +269,7 @@ export default class VirtualRenderer {
     }
 
     //Further optimize in later revision, pretty fast for now considering this is a low frequency event
-    public handleDataSetChange(newDataProvider: BaseDataProvider): void {
+    public handleDataSetChange(newDataProvider: BaseDataProvider, scrollOffset: number): void {
         const getStableId = newDataProvider.getStableId;
         const maxIndex = newDataProvider.getSize() - 1;
         const activeStableIds: { [key: string]: number } = {};
@@ -275,7 +284,7 @@ export default class VirtualRenderer {
 
         //Compute active stable ids and stale active keys and resync render stack
         let preservedIndex = -1;
-        if (this._preserveVisiblePosition) {
+        if (this._preserveVisiblePosition && (this._startEdgePreserved || scrollOffset > this._edgeVisibleThreshold)) {
             if (this._layoutManager) {
                 preservedIndex = this._layoutManager.preservedIndex();
             }
@@ -287,9 +296,6 @@ export default class VirtualRenderer {
         for (const key in this._renderStack) {
             if (this._renderStack.hasOwnProperty(key)) {
                 const index = this._renderStack[key].dataIndex;
-                if (index === preservedIndex) {
-                    preservedStableId = this._fetchStableId(index);
-                }
                 if (!ObjectUtil.isNullOrUndefined(index)) {
                     if (index <= maxIndex) {
                         const stableId = getStableId(index);
@@ -297,11 +303,6 @@ export default class VirtualRenderer {
                     }
                 }
             }
-        }
-
-        // If the preserved stable id is still visible, we preserve the position of the stable id
-        if (this._layoutManager && (preservedStableId !== null) && (preservedStableId in activeStableIds)) {
-            this._layoutManager.setPreservedIndex(activeStableIds[preservedStableId]);
         }
 
         //Clean stable id to key map
@@ -319,11 +320,16 @@ export default class VirtualRenderer {
 
                     const stackItem = this._renderStack[stableIdItem.key];
                     const dataIndex = stackItem ? stackItem.dataIndex : undefined;
-                    if (!ObjectUtil.isNullOrUndefined(dataIndex) && dataIndex <= maxIndex && this._layoutManager) {
+                    if ((!this._preserveVisiblePosition || !this._shiftPreservedLayouts) &&
+                        !ObjectUtil.isNullOrUndefined(dataIndex) && dataIndex <= maxIndex &&
+                        this._layoutManager) {
                         this._layoutManager.removeLayout(dataIndex);
                     }
                 } else {
                     keyToStableIdMap[stableIdItem.key] = key;
+                    if (this._renderStack[stableIdItem.key].dataIndex === preservedIndex) {
+                        preservedStableId = key;
+                    }
                 }
             }
         }
@@ -368,6 +374,16 @@ export default class VirtualRenderer {
                 }
             }
         }
+
+        // If the preserved stable id is still visible, we preserve the position of the stable id
+        if (this._layoutManager && (preservedStableId !== null) && (preservedStableId in activeStableIds)) {
+            const shiftPreservedIndex = activeStableIds[preservedStableId];
+            this._layoutManager.shiftPreservedIndex(preservedIndex, shiftPreservedIndex);
+            if (this._shiftPreservedLayouts) {
+                this._layoutManager.shiftLayouts(shiftPreservedIndex - preservedIndex);
+            }
+        }
+
     }
 
     private _getCollisionAvoidingKey(): string {

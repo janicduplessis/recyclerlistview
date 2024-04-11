@@ -107,6 +107,9 @@ export interface RecyclerListViewProps {
     style?: object | number;
     debugHandlers?: DebugHandlers;
     preserveVisiblePosition?: boolean;
+    edgeVisibleThreshold?: number;
+    startEdgePreserved?: boolean;
+    shiftPreservedLayouts?: boolean;
     renderContentContainer?: (props?: object, children?: React.ReactNode) => React.ReactNode | null;
     renderItemContainer?: (props: object, parentProps: object, children?: React.ReactNode) => React.ReactNode;
     //For all props that need to be proxied to inner/external scrollview. Put them in an object and they'll be spread
@@ -176,6 +179,7 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
 
     private _scrollOffset: number = 0;
     private _scrollHeight: number = 0;
+    private _edgeVisibleThreshold: number = 20;
     private onVisibleIndicesChanged: ((all: number[], now: number[], notNow: number[]) => void) | null = null;
 
     //If the native content container is used, then positions of the list items are changed on the native side. The animated library used
@@ -185,11 +189,18 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
 
     constructor(props: P, context?: any) {
         super(props, context);
+
+        if (props.edgeVisibleThreshold !== undefined) {
+            this._edgeVisibleThreshold = props.edgeVisibleThreshold;
+        }
+
         this._virtualRenderer = new VirtualRenderer(this._renderStackWhenReady, (offset) => {
             this._pendingScrollToOffset = offset;
         }, (index) => {
             return this.props.dataProvider.getStableId(index);
-        }, !props.disableRecycling, !!props.preserveVisiblePosition);
+        }, !props.disableRecycling
+        , !!props.preserveVisiblePosition, !!props.startEdgePreserved, this._edgeVisibleThreshold
+        , (props.shiftPreservedLayouts === undefined) || props.shiftPreservedLayouts);
         this._virtualRenderer.attachVisibleItemsListener(this._onVisibleIndicesChanged);
 
         if (this.props.windowCorrectionConfig) {
@@ -518,7 +529,7 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
         this._virtualRenderer.setLayoutProvider(newProps.layoutProvider);
         if (newProps.dataProvider.hasStableIds() && this.props.dataProvider !== newProps.dataProvider) {
             if (newProps.dataProvider.requiresDataChangeHandling()) {
-                this._virtualRenderer.handleDataSetChange(newProps.dataProvider);
+                this._virtualRenderer.handleDataSetChange(newProps.dataProvider, this._scrollOffset);
             } else if (this._virtualRenderer.hasPendingAnimationOptimization()) {
                 console.warn(Messages.ANIMATION_ON_PAGINATION); //tslint:disable-line
             }
@@ -540,6 +551,7 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
             if (layoutManager) {
                 layoutManager.relayoutFromIndex(newProps.dataProvider.getFirstIndexToProcessInternal(), newProps.dataProvider.getSize());
                 this._virtualRenderer.refresh();
+                this._waitRefixLayout();
             }
         } else if (forceFullRender) {
             const layoutManager = this._virtualRenderer.getLayoutManager();
@@ -547,6 +559,7 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
                 const cachedLayouts = layoutManager.getLayouts();
                 this._virtualRenderer.setLayoutManager(newProps.layoutProvider.createLayoutManager(this._layout, newProps.isHorizontal, cachedLayouts));
                 this._immediateRefreshViewability();
+                this._waitRefixLayout();
             }
         } else if (this._relayoutReqIndex >= 0) {
             const layoutManager = this._virtualRenderer.getLayoutManager();
@@ -555,6 +568,7 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
                 layoutManager.relayoutFromIndex(Math.min(Math.max(dataProviderSize - 1, 0), this._relayoutReqIndex), dataProviderSize);
                 this._relayoutReqIndex = -1;
                 this._immediateRefreshViewability();
+                this._waitRefixLayout();
             }
         }
     }
@@ -843,8 +857,8 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
 
             this._scrollHeight = contentSize.height;
 
-            const minY = Math.max(0, firstLayout.y) - 0.9;
-            const maxY = Math.min(lastLayout.y + lastLayout.height, contentSize.height) - layoutMeasurement.height + 0.9;
+            const minY = Math.max(0, firstLayout.y) - this._edgeVisibleThreshold;
+            const maxY = Math.min(lastLayout.y + lastLayout.height, contentSize.height) - layoutMeasurement.height + this._edgeVisibleThreshold;
             if (offsetY < minY || offsetY > maxY) {
                 setTimeout(() => {
                     this._waitRefixLayout.flush();
@@ -988,6 +1002,9 @@ RecyclerListView.propTypes = {
     itemAnimator: PropTypes.instanceOf(BaseItemAnimator),
 
     preserveVisiblePosition: PropTypes.bool,
+    edgeVisibleThreshold: PropTypes.number,
+    startEdgePreserved: PropTypes.bool,
+    shiftPreservedLayouts: PropTypes.bool,
 
     //All of the Recyclerlistview item cells are enclosed inside this item container. The idea is pass a native UI component which implements a
     //view shifting algorithm to remove the overlaps between the neighbouring views. This is achieved by shifting them by the appropriate

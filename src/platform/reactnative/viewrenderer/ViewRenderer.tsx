@@ -74,13 +74,13 @@ export default class ViewRenderer extends BaseViewRenderer<any> {
 
     private _onLayout = (event: LayoutChangeEvent): void => {
         //Preventing layout thrashing in super fast scrolls where RN messes up onLayout event
-        // const xDiff = Math.abs(this.props.x - event.nativeEvent.layout.x);
-        // const yDiff = Math.abs(this.props.y - event.nativeEvent.layout.y);
-	// https://github.com/keybase/client/pull/25431/files#r1072621042
-        if (/*xDiff < 1 && yDiff < 1 &&*/
-            (!this.props.isOverridden ||
-                // @ts-ignore
-                this.props.height !== event.nativeEvent.layout.height ||
+        // @ts-ignore
+        const xDiff = Math.abs(this.props.x - event.nativeEvent.layout.x);
+        // @ts-ignore
+        const yDiff = Math.abs(this.props.y - event.nativeEvent.layout.y);
+        if (xDiff < 1 && yDiff < 1 &&
+            // @ts-ignore
+            (this.props.height !== event.nativeEvent.layout.height ||
                 // @ts-ignore
                 this.props.width !== event.nativeEvent.layout.width)) {
             // @ts-ignore
