@@ -288,7 +288,7 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
         const layoutManager = this._virtualRenderer.getLayoutManager();
         if (layoutManager) {
             const offsets = layoutManager.getOffsetForIndex(index);
-            this.scrollToOffset(offsets.x, offsets.y, animate, this._windowCorrectionConfig.applyToItemScroll);
+            this.scrollToOffset(offsets.x, offsets.y, animate, this._windowCorrectionConfig.applyToItemScroll, index);
         } else {
             console.warn(Messages.WARN_SCROLL_TO_INDEX); //tslint:disable-line
         }
@@ -315,7 +315,7 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
                 const viewEndPos = mainAxisLayoutPos + mainAxisLayoutDimen;
                 if (viewEndPos > screenEndPos) {
                     const offset = viewEndPos - screenEndPos;
-                    this.scrollToOffset(offset + currentScrollOffset, offset + currentScrollOffset, animate, true);
+                    this.scrollToOffset(offset + currentScrollOffset, offset + currentScrollOffset, animate, true, index);
                 }
             }
         }
@@ -337,7 +337,7 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
     }
 
     public scrollToTop(animate?: boolean): void {
-        this.scrollToOffset(0, 0, animate);
+        this.scrollToIndex(0, animate);
     }
 
     public scrollToEnd(animate?: boolean): void {
@@ -347,7 +347,7 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
 
     // useWindowCorrection specifies if correction should be applied to these offsets in case you implement
     // `applyWindowCorrection` method
-    public scrollToOffset = (x: number, y: number, animate: boolean = false, useWindowCorrection: boolean = false): void => {
+    public scrollToOffset = (x: number, y: number, animate: boolean = false, useWindowCorrection: boolean = false, relativeIndex: number = -1): void => {
         if (this._scrollComponent) {
             if (this.props.isHorizontal) {
                 y = 0;
@@ -355,6 +355,37 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
             } else {
                 x = 0;
                 y = useWindowCorrection ? y - this._windowCorrectionConfig.value.windowShift : y;
+            }
+            if (relativeIndex > -1) {
+                const virtualRenderer = this._virtualRenderer;
+                const preserveVisiblePosition = virtualRenderer.getPreserveVisiblePosition();
+                const layoutManager = virtualRenderer.getLayoutManager();
+                if (preserveVisiblePosition && layoutManager) {
+                    layoutManager.holdPreservedIndex(relativeIndex);
+                    if (animate) {
+                        // the amount of time taken for the animation is variable
+                        // on ios, the animation is documented to be 'constant rate' at an unspecified rate, so the time is proportional to the length of scroll
+                        // on android, the only relevant information the author has discovered is that default animation duration is 250.
+                        // therefore, we hold until relativeIndex comes into view + 1 throttle period
+                        const timer = setInterval(() => {
+                            const visibleIndexes = virtualRenderer.getViewabilityTracker()?.getVisibleIndexes();
+                            if (visibleIndexes) {
+                                for (let i = 0; i < visibleIndexes.length; i++) {
+                                    if (visibleIndexes[i] === relativeIndex) {
+                                        clearInterval(timer);
+                                        setTimeout(() => {
+                                            layoutManager.unholdPreservedIndex();
+                                        }, layoutManager.preservedIndexThrottle());
+                                    }
+                                }
+                            }
+                        }, 100);
+                    } else {
+                        setTimeout(() => {
+                            layoutManager.unholdPreservedIndex();
+                        }, layoutManager.preservedIndexThrottle());
+                    }
+                }
             }
             this._scrollComponent.scrollTo(x, y, animate);
             // this._scrollEvent(x, y, { nativeEvent: { contentOffset: { x: x, y: y } } }, false);

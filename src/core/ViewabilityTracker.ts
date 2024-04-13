@@ -112,6 +112,10 @@ export default class ViewabilityTracker {
         return this._actualOffset;
     }
 
+    public getVisibleIndexes(): number[] {
+        return this._visibleIndexes;
+    }
+
     public getEngagedIndexes(): number[] {
         return this._engagedIndexes;
     }

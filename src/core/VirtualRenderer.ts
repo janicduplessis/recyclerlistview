@@ -93,6 +93,10 @@ export default class VirtualRenderer {
         this._shiftPreservedLayouts = shiftPreservedLayouts;
     }
 
+    public getPreserveVisiblePosition(): boolean {
+        return this._preserveVisiblePosition;
+    }
+
     public getLayoutDimension(): Dimension {
         if (this._layoutManager) {
             return this._layoutManager.getContentDimension();

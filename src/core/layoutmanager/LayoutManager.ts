@@ -68,6 +68,9 @@ export abstract class LayoutManager {
     ): void;
     public abstract preservedIndex(): number;
     public abstract preparePreservedIndex(firstVisibleIndex: number): void;
+    public abstract preservedIndexThrottle(): number;
+    public abstract holdPreservedIndex(index: number): void;
+    public abstract unholdPreservedIndex(): void;
     public abstract shiftPreservedIndex(index: number, shiftPreservedIndex: number): void;
     public abstract shiftLayouts(indexOffset: number): void;
 }
@@ -83,6 +86,7 @@ export class WrapGridLayoutManager extends LayoutManager {
     private _anchorCount: number = 0;
     private _fixIndex: number = -1;
     private _pendingFixY: number | undefined = undefined;
+    private _holdingIndex: boolean = false;
 
     private _preparePreservedIndex = throttle ((firstVisibleIndex: number): void => {
         if ((this._fixIndex > -1) || (firstVisibleIndex >= this._anchorCount)) {
@@ -104,7 +108,21 @@ export class WrapGridLayoutManager extends LayoutManager {
         return this._fixIndex;
     }
     public preparePreservedIndex(firstVisibleIndex: number): void {
-        this._preparePreservedIndex(firstVisibleIndex);
+        if (!this._holdingIndex) {
+            this._preparePreservedIndex(firstVisibleIndex);
+        }
+    }
+    public preservedIndexThrottle(): number {
+        // TODO: refactor with above 200 (from _preparePreservedIndex)
+        return 200;
+    }
+    public holdPreservedIndex(index: number): void {
+        this._fixIndex = index;
+        this._holdingIndex = true;
+        this._preparePreservedIndex.cancel();
+    }
+    public unholdPreservedIndex(): void {
+        this._holdingIndex = false;
     }
     public shiftPreservedIndex(index: number, shiftPreservedIndex: number): void {
         this._fixIndex = shiftPreservedIndex;
