@@ -1032,9 +1032,17 @@ RecyclerListView.propTypes = {
     //animations are JS driven to avoid workflow interference. Also, please note LayoutAnimation is buggy on Android.
     itemAnimator: PropTypes.instanceOf(BaseItemAnimator),
 
+    // Enables alternate layout algorithm when the list scroll offset enters a region where the prior list heights are not precisely known.
+    // The algorithm calculates layouts assuming that the scroll position of an item chosen from the visible region to be fixed, as opposed
+    // to the default algorithm which assumes that the layouts calculated before the visible and engaged region is correct. This algorithm
+    // works well when the estimated size of items can be very far off from the correct value. Only vertical layouts with a single column
+    // is implemented for preserveVisiblePosition at the moment.
     preserveVisiblePosition: PropTypes.bool,
+    // For controlling edge thresholds for refixing and for preserving positions
     edgeVisibleThreshold: PropTypes.number,
+    // For controlling whether visible region should still be preserved even when scroll is near the start of list
     startEdgePreserved: PropTypes.bool,
+    // Enables preserving calculated layouts on (small) data changes; suitable if changes are mostly new items at edges, rather than modifications which change item size
     shiftPreservedLayouts: PropTypes.bool,
 
     //All of the Recyclerlistview item cells are enclosed inside this item container. The idea is pass a native UI component which implements a
