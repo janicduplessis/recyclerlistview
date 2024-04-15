@@ -121,6 +121,7 @@ export default class ScrollComponent extends BaseScrollComponent {
         if (event) {
             // @ts-ignore
             const contentOffset = event.nativeEvent.contentOffset;
+            this._offset = this.props.isHorizontal ? contentOffset.x : contentOffset.y;
             // @ts-ignore
             this.props.onScrollEndDrag(contentOffset.x, contentOffset.y, event);
         }
@@ -130,6 +131,7 @@ export default class ScrollComponent extends BaseScrollComponent {
         if (event) {
             // @ts-ignore
             const contentOffset = event.nativeEvent.contentOffset;
+            this._offset = this.props.isHorizontal ? contentOffset.x : contentOffset.y;
             // @ts-ignore
             this.props.onMomentumScrollEnd(contentOffset.x, contentOffset.y, event);
         }
