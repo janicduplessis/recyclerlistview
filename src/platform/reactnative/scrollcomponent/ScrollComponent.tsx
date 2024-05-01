@@ -89,7 +89,7 @@ export default class ScrollComponent extends BaseScrollComponent {
                 onMomentumScrollEnd={this._onMomentumScrollEnd}
                 onLayout={(!this._isSizeChangedCalledOnce || this.props.canChangeSize) ? this._onLayout : this.props.onLayout}>
                 <View style={{ flexDirection: this.props.isHorizontal ? "row" : "column" }}>
-                    {renderContentContainer(contentContainerProps, this.props.children)}
+                    {renderContentContainer(contentContainerProps, (this.props as any).children)}
                     {this.props.renderFooter ? this.props.renderFooter() : null}
                 </View>
             </Scroller>
@@ -109,44 +109,34 @@ export default class ScrollComponent extends BaseScrollComponent {
 
     private _onScroll = (event?: NativeSyntheticEvent<NativeScrollEvent>): void => {
         if (event) {
-            // @ts-ignore
             const contentOffset = event.nativeEvent.contentOffset;
             this._offset = this.props.isHorizontal ? contentOffset.x : contentOffset.y;
-            // @ts-ignore
             this.props.onScroll(contentOffset.x, contentOffset.y, event);
         }
     }
 
     private _onScrollEndDrag = (event?: any): void => {
         if (event) {
-            // @ts-ignore
             const contentOffset = event.nativeEvent.contentOffset;
             this._offset = this.props.isHorizontal ? contentOffset.x : contentOffset.y;
-            // @ts-ignore
             this.props.onScrollEndDrag(contentOffset.x, contentOffset.y, event);
         }
     }
 
     private _onMomentumScrollEnd = (event?: any): void => {
         if (event) {
-            // @ts-ignore
             const contentOffset = event.nativeEvent.contentOffset;
             this._offset = this.props.isHorizontal ? contentOffset.x : contentOffset.y;
-            // @ts-ignore
             this.props.onMomentumScrollEnd(contentOffset.x, contentOffset.y, event);
         }
     }
 
     private _onLayout = (event: LayoutChangeEvent): void => {
-        // @ts-ignore
         if (this._height !== event.nativeEvent.layout.height || this._width !== event.nativeEvent.layout.width) {
-            // @ts-ignore
             this._height = event.nativeEvent.layout.height;
-            // @ts-ignore
             this._width = event.nativeEvent.layout.width;
             if (this.props.onSizeChanged) {
                 this._isSizeChangedCalledOnce = true;
-                // @ts-ignore
                 this.props.onSizeChanged(event.nativeEvent.layout);
             }
         }

@@ -71,7 +71,7 @@ export default class StickyContainer<P extends StickyContainerProps> extends Com
             onScroll: this._onScroll,
             applyWindowCorrection: this._applyWindowCorrection,
             rowRenderer: this._rlvRowRenderer,
-        });
+        } as any);
         return (
             <View style={this.props.style ? this.props.style : { flex: 1 }}>
                 {recycler}
@@ -198,7 +198,7 @@ export default class StickyContainer<P extends StickyContainerProps> extends Com
     private _isChildRecyclerInstance = (): boolean => {
         return (
             this.props.children.props.dataProvider
-            && this.props.children.props.rowRenderer
+            && (this.props.children.props as any).rowRenderer
             && this.props.children.props.layoutProvider
         );
     }

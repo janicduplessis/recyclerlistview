@@ -47,7 +47,7 @@ export default class ScrollComponent extends BaseScrollComponent {
                     height: this.props.contentHeight,
                     width: this.props.contentWidth,
                 }}>
-                    {this.props.children}
+                    {(this.props as any).children}
                 </div>
                 {this.props.renderFooter ? <div style={this.props.isHorizontal ? {
                     left: this.props.contentWidth,
