@@ -56,7 +56,6 @@ export default class VirtualRenderer {
     private _viewabilityTracker: ViewabilityTracker | null = null;
     private _dimensions: Dimension | null;
     private _optimizeForAnimations: boolean = false;
-    private _firstVisibleIndex: number = -1;
 
     constructor(renderStackChanged: (renderStack: RenderStack) => void,
                 scrollOnNextUpdate: (point: Point) => void,
@@ -288,13 +287,8 @@ export default class VirtualRenderer {
 
         //Compute active stable ids and stale active keys and resync render stack
         let preservedIndex = -1;
-        if (this._preserveVisiblePosition && (this._startEdgePreserved || scrollOffset > this._edgeVisibleThreshold)) {
-            if (this._layoutManager) {
-                preservedIndex = this._layoutManager.preservedIndex();
-            }
-            if (preservedIndex === -1) {
-                preservedIndex = this._firstVisibleIndex;
-            }
+        if (this._preserveVisiblePosition && (this._startEdgePreserved || scrollOffset > this._edgeVisibleThreshold) && this._layoutManager) {
+            preservedIndex = this._layoutManager.preservedIndex();
         }
         let preservedStableId: string | null = null;
         for (const key in this._renderStack) {
@@ -400,6 +394,7 @@ export default class VirtualRenderer {
             if (this.onVisibleItemsChanged) {
                 this._viewabilityTracker.onVisibleRowsChanged = this._onVisibleItemsChanged;
             }
+            this._viewabilityTracker.onItemsChanged = this._onItemsChanged;
             this._viewabilityTracker.setLayouts(this._layoutManager.getLayouts(), this._params.isHorizontal ?
                 this._layoutManager.getContentDimension().width :
                 this._layoutManager.getContentDimension().height);
@@ -413,12 +408,6 @@ export default class VirtualRenderer {
     }
 
     private _onVisibleItemsChanged = (all: number[], now: number[], notNow: number[]): void => {
-        if (all.length) {
-            this._firstVisibleIndex = all[0];
-            if (this._preserveVisiblePosition && this._layoutManager) {
-                this._layoutManager.preparePreservedIndex(all[0]);
-            }
-        }
         if (this.onVisibleItemsChanged) {
             this.onVisibleItemsChanged(all, now, notNow);
         }
@@ -448,6 +437,11 @@ export default class VirtualRenderer {
         }
     }
 
+    private _onItemsChanged = (visibleIndexes: number[], engagedIndexes: number[]): void => {
+        if (this._preserveVisiblePosition && this._layoutManager) {
+            this._layoutManager.preserveIndexes(visibleIndexes, engagedIndexes);
+        }
+    }
     //Updates render stack and reports whether anything has changed
     private _updateRenderStack(itemIndexes: number[]): boolean {
         this._markDirty = false;

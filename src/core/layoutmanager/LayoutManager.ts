@@ -2,7 +2,6 @@
  * Computes the positions and dimensions of items that will be rendered by the list. The output from this is utilized by viewability tracker to compute the
  * lists of visible/hidden item.
  */
-import throttle = require("lodash.throttle");
 import * as React from "react";
 import BaseScrollComponent from "../scrollcomponent/BaseScrollComponent";
 import VirtualRenderer from "../VirtualRenderer";
@@ -53,22 +52,26 @@ export abstract class LayoutManager {
     //can be ignored for a vertical layout given it gets computed via the given column span.
     public abstract overrideLayout(index: number, dim: Dimension): boolean;
 
+    public abstract overrideLayouts(layoutsInfo: LayoutsInfo, offsetsStale: boolean): number;
+
     //Recompute layouts from given index, compute heavy stuff should be here
     public abstract relayoutFromIndex(startIndex: number, itemCount: number): void;
 
     public abstract refix(
-        scrollComponent: BaseScrollComponent,
+        virtualRenderer: VirtualRenderer,
         innerScrollComponent: React.Component,
-        scrollHeight: number,
-        baseOffset: number,
         indexes: Array<number | undefined>,
         itemCount: number,
-        virtualRenderer: VirtualRenderer,
-        retrigger: (height: number) => void,
+        scrollOffset: number,
+        scrollTo: (scrollOffset: number) => void,
+        scrollHeight: number,
+        setScrollHeight: (height: number) => void,
+        relayout: () => void,
+        retrigger: () => void,
     ): void;
     public abstract preservedIndex(): number;
-    public abstract preparePreservedIndex(firstVisibleIndex: number): void;
-    public abstract preservedIndexThrottle(): number;
+    public abstract preserveIndexes(visibleIndexes: number[], engagedIndexes: number[]): void;
+    public abstract isHoldingIndex(): boolean;
     public abstract holdPreservedIndex(index: number): void;
     public abstract unholdPreservedIndex(): void;
     public abstract shiftPreservedIndex(index: number, shiftPreservedIndex: number): void;
@@ -87,12 +90,7 @@ export class WrapGridLayoutManager extends LayoutManager {
     private _fixIndex: number = -1;
     private _pendingFixY: number | undefined = undefined;
     private _holdingIndex: boolean = false;
-
-    private _preparePreservedIndex = throttle ((firstVisibleIndex: number): void => {
-        if ((this._fixIndex > -1) || (firstVisibleIndex >= this._anchorCount)) {
-            this._fixIndex = firstVisibleIndex;
-        }
-    }, 200);
+    private _pendingRelayout: boolean = false;
 
     constructor(layoutProvider: LayoutProvider, renderWindowSize: Dimension, isHorizontal: boolean = false, cachedLayouts?: Layout[]) {
         super();
@@ -107,19 +105,23 @@ export class WrapGridLayoutManager extends LayoutManager {
     public preservedIndex(): number {
         return this._fixIndex;
     }
-    public preparePreservedIndex(firstVisibleIndex: number): void {
+    public preserveIndexes(visibleIndexes: number[], engagedIndexes: number[]): void {
         if (!this._holdingIndex) {
-            this._preparePreservedIndex(firstVisibleIndex);
+            if (visibleIndexes.length) {
+                const firstVisibleIndex = visibleIndexes[0];
+                const lastVisibleIndex = visibleIndexes[visibleIndexes.length - 1];
+                const firstEngagedIndex = engagedIndexes[0];
+                const lastEngagedIndex = engagedIndexes[engagedIndexes.length - 1];
+                this._preparePreservedIndex(firstVisibleIndex, lastVisibleIndex, firstEngagedIndex, lastEngagedIndex);
+            }
         }
     }
-    public preservedIndexThrottle(): number {
-        // TODO: refactor with above 200 (from _preparePreservedIndex)
-        return 200;
+    public isHoldingIndex(): boolean {
+        return this._holdingIndex;
     }
     public holdPreservedIndex(index: number): void {
         this._fixIndex = index;
         this._holdingIndex = true;
-        this._preparePreservedIndex.cancel();
     }
     public unholdPreservedIndex(): void {
         this._holdingIndex = false;
@@ -127,7 +129,6 @@ export class WrapGridLayoutManager extends LayoutManager {
     public shiftPreservedIndex(index: number, shiftPreservedIndex: number): void {
         this._fixIndex = shiftPreservedIndex;
         this._pendingFixY = this._layouts[index].y;
-        this._preparePreservedIndex.cancel();
     }
     public shiftLayouts(indexOffset: number): void {
         // shift existing layout by an offset
@@ -138,6 +139,9 @@ export class WrapGridLayoutManager extends LayoutManager {
         // so the layouting trusts the values, but if all indices are shifted, they could be all wrong
 
         // fill in invalid placeholder values; these will be properly calculated during relayout
+
+        this._pendingRelayout = true;
+
         if (indexOffset > 0) {
             const layoutCount = this._layouts.length;
             const placeholderLayouts = [];
@@ -172,6 +176,9 @@ export class WrapGridLayoutManager extends LayoutManager {
     public overrideLayout(index: number, dim: Dimension): boolean {
         const layout = this._layouts[index];
         if (layout) {
+            if (dim.height !== layout.height) {
+                this._pendingRelayout = true;
+            }
             if ((!layout.isOverridden) && index === this._anchorCount) {
                 let i = this._anchorCount;
                 while (this._layouts[i + 1] && this._layouts[i + 1].isOverridden) {
@@ -186,6 +193,42 @@ export class WrapGridLayoutManager extends LayoutManager {
         return true;
     }
 
+    public overrideLayouts(layoutsInfo: LayoutsInfo, offsetsStale: boolean): number {
+        let inconsistentIndex = -1;
+        const renderedLayouts = layoutsInfo.layouts;
+        for (let i = 0; i < renderedLayouts.length; i++) {
+            const { key, y, height } = renderedLayouts[i];
+            const layout = this._layouts[key];
+            if (layout) {
+                // callers should provide renderedLayouts in sorted order
+                if (inconsistentIndex === -1) {
+                    if (Math.abs(height - layout.height) > 1) {
+                        inconsistentIndex = Math.max(0, key - 1);
+                    } else if (Math.abs(y - layout.y) > 1) {
+                        inconsistentIndex = key;
+                    }
+                }
+
+                layout.isOverridden = true;
+                layout.height = height;
+                if (!offsetsStale) {
+                    layout.y = y;
+                }
+            }
+        }
+        const count = this._layouts.length;
+        if (this._anchorCount < count && this._layouts[this._anchorCount].isOverridden) {
+            let i = this._anchorCount;
+            while (i + 1 < count && this._layouts[i + 1].isOverridden) {
+                i++;
+            }
+            this._anchorCount = i + 1;
+        }
+        if (inconsistentIndex > -1) {
+            this._pendingRelayout = true;
+        }
+        return inconsistentIndex;
+    }
     public setMaxBounds(itemDim: Dimension): void {
         if (this._isHorizontal) {
             itemDim.height = Math.min(this._window.height, itemDim.height);
@@ -196,6 +239,7 @@ export class WrapGridLayoutManager extends LayoutManager {
 
     //TODO:Talha laziliy calculate in future revisions
     public relayoutFromIndex(startIndex: number, itemCount: number): void {
+        this._pendingRelayout = false;
         startIndex = this._locateFirstNeighbourIndex(startIndex);
         let startX = 0;
         let startY = 0;
@@ -331,62 +375,141 @@ export class WrapGridLayoutManager extends LayoutManager {
     }
 
     public refix(
-        scrollComponent: BaseScrollComponent,
+        virtualRenderer: VirtualRenderer,
         innerScrollComponent: React.Component,
-        scrollHeight: number,
-        baseOffset: number,
         indexes: Array<number | undefined>,
         itemCount: number,
-        virtualRenderer: VirtualRenderer,
-        retrigger: (height: number) => void,
+        scrollOffset: number,
+        scrollTo: (scrollOffset: number) => void,
+        scrollHeight: number,
+        setScrollHeight: (height: number) => void,
+        relayout: () => void,
+        retrigger: () => void,
     ): void {
-        const refixOffset = - this._layouts[0].y;
-
-        // if the content height is not as tall as the scroll destination, scrollTo will fail
-        // so, we must first set the height the content before we do the rest of refix
-        if (refixOffset > 0 && scrollHeight < Math.min(baseOffset, this._totalHeight) + refixOffset) {
-            // @ts-ignore
-            innerScrollComponent.setNativeProps({ style: { height: this._totalHeight + refixOffset } });
-            // @ts-ignore
-            innerScrollComponent.measure((x, y, width, height, pageX, pageY) => {
-                retrigger(height);
-            });
+        if (this._pendingRelayout) {
+            setTimeout(() => {
+                retrigger();
+            }, 15);
         } else {
-            if (refixOffset !== 0) {
-                for (let i = 0; i < itemCount; i++) {
-                    this._layouts[i].y += refixOffset;
-                }
-                this._totalHeight += refixOffset;
+            const refixOffset = - this._layouts[0].y;
 
-                // @ts-ignore
-                innerScrollComponent.setNativeProps({ style: { height: this._totalHeight } });
-
-                for (let i = 0; i < indexes.length; i++) {
-                    const index = indexes[i];
-                    if (index !== undefined) {
-                        const y = this._layouts[index].y;
-                        // @ts-ignore
-                        innerScrollComponent._children[i].setNativeProps({ style: { top: y } });
+            // if the content height is not as tall as the scroll destination, scrollTo will fail
+            // so, we must first set the height the content before we do the rest of refix
+            if (scrollHeight < Math.min(scrollOffset, this._totalHeight) + refixOffset) {
+                (innerScrollComponent as any).setNativeProps({ style: { height: this._totalHeight + refixOffset } });
+                (innerScrollComponent as any).measure((x: number, y: number, width: number, height: number, pageX: number, pageY: number) => {
+                    setScrollHeight(height);
+                    retrigger();
+                });
+            } else {
+                if (refixOffset !== 0) {
+                    for (let i = 0; i < itemCount; i++) {
+                        this._layouts[i].y += refixOffset;
                     }
-                }
-                scrollComponent.scrollTo(0, baseOffset + refixOffset, false);
+                    this._totalHeight += refixOffset;
 
-                const viewabilityTracker = virtualRenderer.getViewabilityTracker();
-                if (viewabilityTracker) {
-                    (viewabilityTracker as any)._currentOffset += refixOffset;
-                    (viewabilityTracker as any)._maxOffset += refixOffset;
-                    (viewabilityTracker as any)._visibleWindow.start += refixOffset;
-                    (viewabilityTracker as any)._visibleWindow.end += refixOffset;
-                    (viewabilityTracker as any)._engagedWindow.start += refixOffset;
-                    (viewabilityTracker as any)._engagedWindow.end += refixOffset;
-                    (viewabilityTracker as any)._actualOffset += refixOffset;
+                    if (Math.abs(refixOffset) >= 1) {
+                        (innerScrollComponent as any).setNativeProps({ style: { height: this._totalHeight } });
+                        for (let i = 0; i < indexes.length; i++) {
+                            const index = indexes[i];
+                            if ((index !== undefined) && (innerScrollComponent as any)._children[i]) {
+                                const y = this._layouts[index].y;
+                                (innerScrollComponent as any)._children[i].setNativeProps({ style: { top: y } });
+                            }
+                        }
+                        relayout();
+                        scrollTo(scrollOffset + refixOffset);
+                    }
+
+                    const viewabilityTracker = virtualRenderer.getViewabilityTracker();
+                    if (viewabilityTracker) {
+                        (viewabilityTracker as any)._currentOffset += refixOffset;
+                        (viewabilityTracker as any)._maxOffset += refixOffset;
+                        (viewabilityTracker as any)._visibleWindow.start += refixOffset;
+                        (viewabilityTracker as any)._visibleWindow.end += refixOffset;
+                        (viewabilityTracker as any)._engagedWindow.start += refixOffset;
+                        (viewabilityTracker as any)._engagedWindow.end += refixOffset;
+                        (viewabilityTracker as any)._actualOffset += refixOffset;
+                    }
+                } else {
+                    (innerScrollComponent as any).setNativeProps({ style: { height: this._totalHeight } });
+                }
+
+                // reset fix
+                if (this._fixIndex < this._anchorCount) {
+                    this._fixIndex = -1;
                 }
             }
 
-            // reset fix
-            if (this._fixIndex < this._anchorCount) {
-                this._fixIndex = -1;
+        }
+    }
+
+    // Fixing indexes aims to avoid visible layout shifts.
+    // To achieve this, when we select an index to fix, we aim to 1) move the fix index as little as possible, 2) prefer overriden indexes,
+    // and 3) prefer visible indexes.
+    // 1) is because users do not expect previously viewed content to shift, wheras some degree of shifting for new content is understandable
+    // 2) is because indexes which have already been overriden have known layouts, and should be more accurate. Furthermore, when overrides
+    // come from nonDeterministicMode="autolayout", overriden layouts are the rendered values, and fixing to them ensures that we do not cause
+    // rendered items to shift.
+    // 3) is because visible content shifts occur when the total height of items between the fixed position and the rendered item changes. With
+    // _fixIndex close to other visible itmes, we minimise the number of items between the fixed position and visible content, so that we
+    // minimise the number of items that can cause total height changes.
+    // When the above considerations cannot be met, we prefer to leave _fixIndex unchanged until they can be, as long as the previous _fixIndex
+    // is still admissable.
+    private _preparePreservedIndex = (firstVisibleIndex: number, lastVisibleIndex: number, firstEngagedIndex: number, lastEngagedIndex: number): void => {
+        let index = -1;
+        if (this._fixIndex < firstVisibleIndex && (this._fixIndex > -1 || firstVisibleIndex >= this._anchorCount)) {
+            let i = 0;
+            let j = 1;
+            for (; i < 1 + firstVisibleIndex - firstEngagedIndex; i++) {
+                if (this._layouts[firstVisibleIndex - i].isOverridden) {
+                    index = 0;
+                    break;
+                }
             }
+            for (; j < Math .min (i, 1 + lastEngagedIndex - firstVisibleIndex); j++) {
+                if (this._layouts[firstVisibleIndex + j].isOverridden) {
+                    index = 0;
+                    break;
+                }
+            }
+            if (index === 0) {
+                if (j < i) {
+                    index = firstVisibleIndex + j;
+                } else {
+                    index = firstVisibleIndex - i;
+                }
+            } else if (this._fixIndex < firstEngagedIndex) {
+                index = firstVisibleIndex;
+            }
+        } else if (this._fixIndex > lastVisibleIndex) {
+            let i = 0;
+            let j = 1;
+            for (; i < 1 + lastEngagedIndex - lastVisibleIndex; i++) {
+                if (this._layouts[lastVisibleIndex + i].isOverridden) {
+                    index = 0;
+                    break;
+                }
+            }
+            for (; j < Math .min (i, 1 + lastVisibleIndex - firstEngagedIndex); j++) {
+                if (this._layouts[lastVisibleIndex - j].isOverridden) {
+                    index = 0;
+                    break;
+                }
+            }
+            if (index === 0) {
+                if (j < i) {
+                    index = lastVisibleIndex - j;
+                } else {
+                    index = lastVisibleIndex + i;
+                }
+            } else if (this._fixIndex > lastEngagedIndex) {
+                index = lastVisibleIndex;
+            }
+        }
+
+        if (index > -1) {
+            this._fixIndex = index;
         }
     }
 
@@ -437,4 +560,14 @@ export interface Layout extends Dimension, Point {
 export interface Point {
     x: number;
     y: number;
+}
+export interface LayoutsInfo {
+    layouts: Array<{
+        key: number,
+        height: number,
+        y: number,
+    }>;
+}
+export interface AutoLayoutEvent {
+    nativeEvent: LayoutsInfo & { autoLayoutId: number };
 }

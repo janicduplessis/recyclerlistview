@@ -19,6 +19,7 @@
  * TODO: Solve //TSI
  */
 import debounce = require("lodash.debounce");
+import throttle = require("lodash.throttle");
 import * as PropTypes from "prop-types";
 import * as React from "react";
 import { ObjectUtil, Default } from "ts-object-utils";
@@ -27,7 +28,7 @@ import { BaseDataProvider } from "./dependencies/DataProvider";
 import { Dimension, BaseLayoutProvider } from "./dependencies/LayoutProvider";
 import CustomError from "./exceptions/CustomError";
 import RecyclerListViewExceptions from "./exceptions/RecyclerListViewExceptions";
-import { Point, Layout, LayoutManager } from "./layoutmanager/LayoutManager";
+import { Point, AutoLayoutEvent, Layout, LayoutManager } from "./layoutmanager/LayoutManager";
 import { Constants } from "./constants/Constants";
 import { Messages } from "./constants/Messages";
 import BaseScrollComponent from "./scrollcomponent/BaseScrollComponent";
@@ -107,6 +108,7 @@ export interface RecyclerListViewProps {
     style?: object | number;
     debugHandlers?: DebugHandlers;
     preserveVisiblePosition?: boolean;
+    nonDeterministicMode?: "autolayout" | "normal";
     edgeVisibleThreshold?: number;
     startEdgePreserved?: boolean;
     shiftPreservedLayouts?: boolean;
@@ -179,7 +181,14 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
 
     private _scrollOffset: number = 0;
     private _scrollHeight: number = 0;
+    private _isUserScrolling: boolean = false;
     private _edgeVisibleThreshold: number = 20;
+    private _isEdgeVisible: boolean = true;
+    private _autoLayout: boolean = false;
+    private _pendingAutoLayout: boolean = false;
+    private _autoLayoutId: number = 0x00000000;
+    private _holdTimer?: number;
+
     private onVisibleIndicesChanged: ((all: number[], now: number[], notNow: number[]) => void) | null = null;
 
     //If the native content container is used, then positions of the list items are changed on the native side. The animated library used
@@ -192,6 +201,9 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
 
         if (props.edgeVisibleThreshold !== undefined) {
             this._edgeVisibleThreshold = props.edgeVisibleThreshold;
+        }
+        if (props.nonDeterministicMode !== undefined) {
+            this._autoLayout = props.nonDeterministicMode === "autolayout";
         }
 
         this._virtualRenderer = new VirtualRenderer(this._renderStackWhenReady, (offset) => {
@@ -362,33 +374,38 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
                 const layoutManager = virtualRenderer.getLayoutManager();
                 if (preserveVisiblePosition && layoutManager) {
                     layoutManager.holdPreservedIndex(relativeIndex);
+                    if (this._autoLayout) {
+                        this._autoLayoutId = (this._autoLayoutId + 1) & 0xFFFFFFFF;
+                        (this._innerScrollComponent as any).setNativeProps({ preservedIndex: relativeIndex, autoLayoutId: this._autoLayoutId });
+                    }
                     if (animate) {
                         // the amount of time taken for the animation is variable
                         // on ios, the animation is documented to be 'constant rate' at an unspecified rate, so the time is proportional to the length of scroll
                         // on android, the only relevant information the author has discovered is that default animation duration is 250.
                         // therefore, we hold until relativeIndex comes into view + 1 throttle period
-                        const timer = setInterval(() => {
-                            const visibleIndexes = virtualRenderer.getViewabilityTracker()?.getVisibleIndexes();
-                            if (visibleIndexes) {
-                                for (let i = 0; i < visibleIndexes.length; i++) {
-                                    if (visibleIndexes[i] === relativeIndex) {
-                                        clearInterval(timer);
-                                        setTimeout(() => {
+                        if (this._holdTimer !== undefined) {
+                            clearInterval(this._holdTimer);
+                        }
+                        this._holdTimer = setInterval(() => {
+                            if (Math.abs(this._scrollOffset - y) < 1) {
+                                const visibleIndexes = virtualRenderer.getViewabilityTracker()?.getVisibleIndexes();
+                                if (visibleIndexes) {
+                                    for (let i = 0; i < visibleIndexes.length; i++) {
+                                        if (visibleIndexes[i] === relativeIndex) {
+                                            clearInterval(this._holdTimer);
+                                            this._holdTimer = undefined;
                                             layoutManager.unholdPreservedIndex();
-                                        }, layoutManager.preservedIndexThrottle());
+                                        }
                                     }
                                 }
                             }
-                        }, 100);
+                        }, 48);
                     } else {
-                        setTimeout(() => {
-                            layoutManager.unholdPreservedIndex();
-                        }, layoutManager.preservedIndexThrottle());
+                        layoutManager.unholdPreservedIndex();
                     }
                 }
             }
             this._scrollComponent.scrollTo(x, y, animate);
-            // this._scrollEvent(x, y, { nativeEvent: { contentOffset: { x: x, y: y } } }, false);
         }
     }
 
@@ -466,20 +483,31 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
         //     ...props,
         // } = this.props;
 
+        if (this._autoLayout) {
+            this._pendingAutoLayout = true;
+        }
         const layoutManager = this._virtualRenderer.getLayoutManager();
 
+        // preserveVisiblePosition mechanisms and especially the refix mechanism relies on prompt scroll events,
+	// and also on the latest update to be accurate. this neccesitates listening to the drag and momentum
+	// scroll events.
         return (
             <ScrollComponent
                 ref={(scrollComponent) => {if (scrollComponent) {this._scrollComponent = scrollComponent as BaseScrollComponent | null}}}
                 innerRef={(innerScrollComponent: any) => {if (innerScrollComponent) {this._innerScrollComponent = innerScrollComponent as React.Component | null}}}
                 {...this.props}
                 {...this.props.scrollViewProps}
+                scrollOffset={this._scrollOffset}
                 preservedIndex={layoutManager ? layoutManager.preservedIndex() : -1}
-                scrollEventThrottle={16}
+		autoLayoutId={this._autoLayoutId}
+		scrollEventThrottle={16}
                 onScroll={this._onScroll}
+                onScrollBeginDrag={this._onScrollBeginDrag}
                 onScrollEndDrag={this._onScrollEndDrag}
+                onMomentumScrollBegin={this._onMomentumScrollBegin}
                 onMomentumScrollEnd={this._onMomentumScrollEnd}
                 onSizeChanged={this._onSizeChanged}
+                onAutoLayout={this._onAutoLayout}
                 contentHeight={this._initComplete ? this._virtualRenderer.getLayoutDimension().height : 0}
                 contentWidth={this._initComplete ? this._virtualRenderer.getLayoutDimension().width : 0}
                 renderAheadOffset={this.getCurrentRenderAheadOffset()}>
@@ -582,15 +610,15 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
             if (layoutManager) {
                 layoutManager.relayoutFromIndex(newProps.dataProvider.getFirstIndexToProcessInternal(), newProps.dataProvider.getSize());
                 this._virtualRenderer.refresh();
-                this._waitRefixLayout();
+                this._queueLayoutRefix();
             }
         } else if (forceFullRender) {
             const layoutManager = this._virtualRenderer.getLayoutManager();
             if (layoutManager) {
                 const cachedLayouts = layoutManager.getLayouts();
                 this._virtualRenderer.setLayoutManager(newProps.layoutProvider.createLayoutManager(this._layout, newProps.isHorizontal, cachedLayouts));
-                this._immediateRefreshViewability();
-                this._waitRefixLayout();
+                this._refreshViewability();
+                this._queueLayoutRefix();
             }
         } else if (this._relayoutReqIndex >= 0) {
             const layoutManager = this._virtualRenderer.getLayoutManager();
@@ -598,8 +626,8 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
                 const dataProviderSize = newProps.dataProvider.getSize();
                 layoutManager.relayoutFromIndex(Math.min(Math.max(dataProviderSize - 1, 0), this._relayoutReqIndex), dataProviderSize);
                 this._relayoutReqIndex = -1;
-                this._immediateRefreshViewability();
-                this._waitRefixLayout();
+                this._refreshViewability();
+                this._queueLayoutRefix();
             }
         }
     }
@@ -607,10 +635,6 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
     private _refreshViewability(): void {
         this._virtualRenderer.refresh();
         this._queueStateRefresh();
-    }
-    private _immediateRefreshViewability(): void {
-        this._virtualRenderer.refresh();
-        this._immediateStateRefresh();
     }
 
     private _queueStateRefresh(): void {
@@ -620,11 +644,6 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
                     return prevState;
                 });
             }
-        });
-    }
-    private _immediateStateRefresh(): void {
-        this.setState((prevState) => {
-            return prevState;
         });
     }
 
@@ -789,7 +808,7 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
         }
 
         // Add extra protection for overrideLayout as it can only be called when non-deterministic rendering is used.
-        if (this.props.forceNonDeterministicRendering && layoutManager.overrideLayout(index, dim)) {
+        if (this.props.forceNonDeterministicRendering && !this._autoLayout && layoutManager.overrideLayout(index, dim)) {
             if (this._relayoutReqIndex === -1) {
                 this._relayoutReqIndex = index;
             } else {
@@ -821,61 +840,53 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
         return renderedItems;
     }
 
-    private _waitRefixLayout = debounce(() => {
-        if (this._isMounted) {
-            const layoutManager = this._virtualRenderer.getLayoutManager();
-            const viewabilityTracker = this._virtualRenderer.getViewabilityTracker() as ViewabilityTracker;
-            const dataProviderSize = this.props.dataProvider.getSize();
-            const { _scrollOffset, _scrollHeight, _scrollComponent, _innerScrollComponent } = this;
-
-            if (layoutManager && viewabilityTracker && _scrollHeight && _scrollComponent && _innerScrollComponent) {
-                const indexes: (number | undefined)[] = [];
-                for (const key in this.state.renderStack) {
-                    if (this.state.renderStack.hasOwnProperty(key)) {
-                        indexes.push(this.state.renderStack[key].dataIndex);
-                    }
-                }
-
-                layoutManager.refix(
-                    _scrollComponent,
-                    _innerScrollComponent,
-                    _scrollHeight,
-                    _scrollOffset,
-                    indexes,
-                    dataProviderSize,
-                    this._virtualRenderer,
-                    (scrollHeight) => {
-                        this._scrollHeight = scrollHeight;
-
-                        this._waitRefixLayout();
-                        this._waitRefixLayout.flush();
-                    },
-                )
-            } 
-        }
-    }, 1500);
-
     private _onScroll = (offsetX: number, offsetY: number, rawEvent: ScrollEvent): void => {
-        this._scrollEvent(offsetX, offsetY, rawEvent, true);
+        this._scrollUpdate(offsetX, offsetY);
+
+        this.props.onScroll?.(rawEvent, offsetX, offsetY);
+
+        this._processScrollEnd(offsetX, offsetY, rawEvent);
+    }
+
+    private _onScrollBeginDrag = (offsetX: number, offsetY: number, rawEvent: ScrollEvent): void => {
+        this._scrollUpdate(offsetX, offsetY);
+        (this.props as any).onScrollBeginDrag?.(rawEvent);
+        this._isUserScrolling = true;
+        // halts holding indexes (used to implement scrollTo) on user interaction;
+        // upon user interaction, scrollTo will have no way to complete naturally
+        if (this._holdTimer !== undefined) {
+	    clearInterval(this._holdTimer);
+            this._holdTimer = undefined;
+            //Cannot be null here
+            const layoutManager: LayoutManager = this._virtualRenderer.getLayoutManager() as LayoutManager;
+	    layoutManager.unholdPreservedIndex();
+	}
+        this._processScrollEnd(offsetX, offsetY, rawEvent);
     }
 
     private _onScrollEndDrag = (offsetX: number, offsetY: number, rawEvent: ScrollEvent): void => {
-        this._scrollEvent(offsetX, offsetY, rawEvent, false);
+        this._scrollUpdate(offsetX, offsetY);
+        (this.props as any).onScrollEndDrag?.(rawEvent);
+        this._isUserScrolling = false;
+        this._processScrollEnd(offsetX, offsetY, rawEvent);
+    }
+
+    private _onMomentumScrollBegin = (offsetX: number, offsetY: number, rawEvent: ScrollEvent): void => {
+        this._scrollUpdate(offsetX, offsetY);
+        (this.props as any).onMomentumScrollBegin?.(rawEvent);
+        this._processScrollEnd(offsetX, offsetY, rawEvent);
     }
 
     private _onMomentumScrollEnd = (offsetX: number, offsetY: number, rawEvent: ScrollEvent): void => {
-        this._scrollEvent(offsetX, offsetY, rawEvent, false);
-    }
-
-    private _scrollEvent = (offsetX: number, offsetY: number, rawEvent: ScrollEvent, isOnScroll: boolean): void => {
         this._scrollUpdate(offsetX, offsetY);
 
-        if (isOnScroll && this.props.onScroll) {
-            this.props.onScroll(rawEvent, offsetX, offsetY);
-        }
+        (this.props as any).onMomentumScrollEnd?.(rawEvent);
+        this._processScrollEnd(offsetX, offsetY, rawEvent);
+    }
+    private _processScrollEnd = (offsetX: number, offsetY: number, rawEvent: ScrollEvent): void => {
         this._processOnEndReached();
 
-        this._scrollOffset = offsetY;
+        this._scrollOffset = this.props.isHorizontal ? offsetX : offsetY;
 
         const layoutManager = this._virtualRenderer.getLayoutManager();
         const layouts = layoutManager?.getLayouts();
@@ -888,25 +899,25 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
 
             this._scrollHeight = contentSize.height;
 
-            const minY = Math.max(0, firstLayout.y) - this._edgeVisibleThreshold;
-            const maxY = Math.min(lastLayout.y + lastLayout.height, contentSize.height) - layoutMeasurement.height + this._edgeVisibleThreshold;
-            if (offsetY < minY || offsetY > maxY) {
+            const minY = Math.max(0, firstLayout.y) + this._edgeVisibleThreshold;
+            const maxY = Math.min(lastLayout.y + lastLayout.height, contentSize.height) - layoutMeasurement.height - this._edgeVisibleThreshold;
+            const isEdgeVisible = offsetY < minY || offsetY > maxY;
+            this._isEdgeVisible = isEdgeVisible;
+            if (isEdgeVisible) {
                 setTimeout(() => {
-                    this._waitRefixLayout.flush();
+                    this._queueLayoutRefix.flush();
                 }, 0);
             }
         }
 
-        this._waitRefixLayout();
+        this._queueLayoutRefix();
     }
 
-    // throttling is probably not necessary, since updateOffset had always been called
-    // on every frame in android anyways.
-    private _scrollUpdate = /*throttle (*/(offsetX: number, offsetY: number): void => {
+    private _scrollUpdate = throttle ((offsetX: number, offsetY: number): void => {
         // correction to be positive to shift offset upwards; negative to push offset downwards.
         // extracting the correction value from logical offset and updating offset of virtual renderer.
         this._virtualRenderer.updateOffset(offsetX, offsetY, true, this._getWindowCorrection(offsetX, offsetY, this.props));
-    }/*, 67)*/
+    }, 8)
 
     private _onVisibleIndicesChanged = (all: number[], now: number[], notNow: number[]): void => {
         if (this.onVisibleIndicesChanged) {
@@ -937,6 +948,86 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
             }
         }
     }
+    private _onAutoLayout = this.props.nonDeterministicMode === "autolayout" ? (rawEvent: AutoLayoutEvent): void => {
+	const offsetsStale = this._autoLayoutId !== rawEvent.nativeEvent.autoLayoutId;
+        // cannot be null here
+        const layoutManager = this._virtualRenderer.getLayoutManager() as LayoutManager;
+        const renderedLayouts = rawEvent.nativeEvent;
+        const relayoutIndex = layoutManager.overrideLayouts(renderedLayouts, offsetsStale);
+    
+	if (!offsetsStale) {
+            this._pendingAutoLayout = false;
+    
+            if (relayoutIndex > -1) {
+                if (this._relayoutReqIndex === -1) {
+                    this._relayoutReqIndex = relayoutIndex;
+                } else {
+                    this._relayoutReqIndex = Math.min(this._relayoutReqIndex, relayoutIndex);
+                }
+                this._queueStateRefresh();
+            }
+	}
+    } : undefined;
+    private _queueLayoutRefix = debounce(() => {
+        if (this._isMounted) {
+            const layoutManager = this._virtualRenderer.getLayoutManager();
+            const viewabilityTracker = this._virtualRenderer.getViewabilityTracker() as ViewabilityTracker;
+            const dataProviderSize = this.props.dataProvider.getSize();
+            const { _scrollOffset, _scrollHeight, _scrollComponent, _innerScrollComponent } = this;
+            if (layoutManager && viewabilityTracker && _scrollHeight && _scrollComponent && _innerScrollComponent) {
+                // if we refix when an auto layout is pending, we may cause a relayout that conflicts with the atuolayout rendered positions
+		// if we refix while holding indexes, relevant offsets will become inaccurate. indexes are held while u scroll to a presumed
+		// offset is happening, and offset shifts will break assumptions of the scroll destination
+		// if the user is scrolling, similarly, we avoid shifting layouts, unless the user is at the edge
+                if (this._pendingAutoLayout || layoutManager.isHoldingIndex() || (this._isUserScrolling && !this._isEdgeVisible)) {
+                    setTimeout(() => {
+                        this._queueLayoutRefix();
+                        if (this._isEdgeVisible) {
+                            this._queueLayoutRefix.flush();
+        		}
+                    }, 15);
+                } else {
+                    const indexes: (number | undefined)[] = [];
+                    for (const key in this.state.renderStack) {
+                        if (this.state.renderStack.hasOwnProperty(key)) {
+                            indexes.push(this.state.renderStack[key].dataIndex);
+                        }
+                    }
+                    layoutManager.refix(
+                        this._virtualRenderer,
+                        _innerScrollComponent,
+                        indexes,
+                        dataProviderSize,
+                        _scrollOffset,
+                        (scrollOffset) => {
+                            _scrollComponent.scrollTo(0, scrollOffset, false);
+                            this._scrollOffset = scrollOffset;
+			    this._scrollUpdate.cancel();
+                        },
+                        _scrollHeight,
+                        (scrollHeight) => {
+                            this._scrollHeight = scrollHeight;
+                        },
+                        () => {
+                            if (this._autoLayout) {
+                                this._pendingAutoLayout = true;
+                                this._autoLayoutId = (this._autoLayoutId + 1) & 0xFFFFFFFF;
+		    	    (_innerScrollComponent as any).setNativeProps({ autoLayoutId: this._autoLayoutId });
+		    	}
+                        },
+                        () => {
+                            this._queueLayoutRefix();
+                            if (this._isEdgeVisible) {
+                                this._queueLayoutRefix.flush();
+		    	}
+                        },
+                    );
+                }
+            } 
+        }
+    // scroll events appear to be infreuqent and far between during quick momentum scrolls; we cannot set this too small, 
+    // or risk interrupting such scrolls
+    }, 1500);
 }
 
 RecyclerListView.propTypes = {
@@ -1032,12 +1123,27 @@ RecyclerListView.propTypes = {
     //animations are JS driven to avoid workflow interference. Also, please note LayoutAnimation is buggy on Android.
     itemAnimator: PropTypes.instanceOf(BaseItemAnimator),
 
-    // Enables alternate layout algorithm when the list scroll offset enters a region where the prior list heights are not precisely known.
-    // The algorithm calculates layouts assuming that the scroll position of an item chosen from the visible region to be fixed, as opposed
-    // to the default algorithm which assumes that the layouts calculated before the visible and engaged region is correct. This algorithm
-    // works well when the estimated size of items can be very far off from the correct value. Only vertical layouts with a single column
-    // is implemented for preserveVisiblePosition at the moment.
+    // Enables an alternate layout algorithm when the list scrolls into regions where item heights are not precisely known.
+    // The alternate algorithm calculates layouts by assuming that the offset of an item chosen from the visible region is correct and
+    // to be fixed at its current position, as opposed to the default algorithm which assumes that the layouts in front of the
+    // visible and engaged region is correct and fixed to the start of the scroller. This algorithm works well when the estimated size of 
+    // items can be very far off from the correct value. Only vertical layouts with a single column is implemented for preserveVisiblePosition
+    // at the moment.
+    // Because the preserveVisiblePosition layout algorithm performs layouting by forcibly assuming the positioning of visible
+    // items to be correct, this can cause the list to be offset at the edges. This will cause issues when the scroll position is close to edges such
+    // that the edge is visible. To correct for this, when the user stops scrolling, or the user moves close to edges, the list will trigger
+    // "refix" operations that recalibrates the physical locations of offsets and scroll positions to the correct logical locations. 
     preserveVisiblePosition: PropTypes.bool,
+    // This props selects the method of determining rendered layouts with forceNonDeterministicRendering.
+    // This should usually be 'normal', which detects rendered layout sizes using the onLayout event from View.
+    // If the provided renderContentContainer supports the onAutoLayout event, 'autolayout' can be provided to this prop,
+    // so that information from onAutoLayout is used instead. This allows information on all the rendered items to be
+    // taken into account, so that it has potential to be faster and should not cause issues due to onLayouts of items arriving
+    // at different timings or being dropped. Furthermore, the autolayout mode allows the rendered offset to be taken into account,
+    // as opposed to just the heights of items. The preserveVisiblePosition layout algorithm will attempt to cooperate with the 
+    // rendered offset from autolayout whenever possible, so that layout shifts due to mismatch between rendered layout and the 
+    // logical layout are minimized. If possible, this should be used if the renderContentContainer component performs layouting by itself.
+    nonDeterministicMode: PropTypes.oneOf([ "autolayout", "normal" ]),
     // For controlling edge thresholds for refixing and for preserving positions
     edgeVisibleThreshold: PropTypes.number,
     // For controlling whether visible region should still be preserved even when scroll is near the start of list
