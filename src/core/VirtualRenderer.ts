@@ -379,6 +379,10 @@ export default class VirtualRenderer {
             this._layoutManager.shiftPreservedIndex(preservedIndex, shiftPreservedIndex);
             if (this._shiftPreservedLayouts) {
                 this._layoutManager.shiftLayouts(shiftPreservedIndex - preservedIndex);
+        // DEBUG: console.log("handled data change; preservedStableId = " + preservedStableId);
+                // DEBUG: console.log("stable still visible");
+                // DEBUG: console.log("stable not visible, search");
+                        // DEBUG: console.log("stable found");
             }
         }
 
@@ -417,8 +421,11 @@ export default class VirtualRenderer {
         const count = notNow.length;
         let resolvedKey;
         let disengagedIndex = 0;
+        // DEBUG: console.log("engaged items changed");
+        // DEBUG: console.log("recycling enabled? " + this._isRecyclingEnabled);
         if (this._isRecyclingEnabled) {
             for (let i = 0; i < count; i++) {
+                // DEBUG: console.log("disengaged " + notNow[i]);
                 disengagedIndex = notNow[i];
                 delete this._engagedIndexes[disengagedIndex];
                 if (this._params && disengagedIndex < this._params.itemCount) {
@@ -442,8 +449,10 @@ export default class VirtualRenderer {
             this._layoutManager.preserveIndexes(visibleIndexes, engagedIndexes);
         }
     }
+
     //Updates render stack and reports whether anything has changed
     private _updateRenderStack(itemIndexes: number[]): boolean {
+        // DEBUG: console.log("update?");
         this._markDirty = false;
         const count = itemIndexes.length;
         let index = 0;
@@ -453,6 +462,7 @@ export default class VirtualRenderer {
             this._engagedIndexes[index] = 1;
             this.syncAndGetKey(index);
             hasRenderStackChanged = this._markDirty;
+            // DEBUG: console.log("check ", index, hasRenderStackChanged);
         }
         this._markDirty = false;
         return hasRenderStackChanged;

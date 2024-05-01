@@ -320,12 +320,16 @@ export default class ViewabilityTracker {
 
         this._visibleWindow.start = startOffset;
         this._visibleWindow.end = endOffset;
+        // DEBUG: console.log('tracking engaged: ', this._engagedWindow.start, this._engagedWindow.end);
+        // DEBUG: console.log('tracking visible: ', this._visibleWindow.start, this._visibleWindow.end);
     }
 
     //TODO:Talha optimize this
     private _diffUpdateOriginalIndexesAndRaiseEvents(newVisibleItems: number[], newEngagedItems: number[]): void {
         this._diffArraysAndCallFunc(newVisibleItems, this._visibleIndexes, this.onVisibleRowsChanged);
         this._diffArraysAndCallFunc(newEngagedItems, this._engagedIndexes, this.onEngagedRowsChanged);
+        // DEBUG: console.log('visible: ', newVisibleItems .map (x => x + ' ; ' + this._layouts[x].y + ' (' + this._layouts[x].height + (this._layouts[x].isOverridden ? ' overridden' : ' not overridden') + ') ') .join (','));
+        // DEBUG: console.log('engaged: ', newEngagedItems .map (x => x + ' ; ' + this._layouts[x].y + ' (' + this._layouts[x].height + (this._layouts[x].isOverridden ? ' overridden' : ' not overridden') + ') ') .join (','));
         this._visibleIndexes = newVisibleItems;
         this._engagedIndexes = newEngagedItems;
         if (this.onItemsChanged) {

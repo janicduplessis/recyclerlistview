@@ -54,6 +54,7 @@ export abstract class BaseDataProvider {
     //No need to override this one
     //If you already know the first row where rowHasChanged will be false pass it upfront to avoid loop
     public cloneWithRows(newData: any[], firstModifiedIndex?: number): DataProvider {
+        // DEBUG: console.log("cloning rows from " + firstModifiedIndex);
         const dp = this.newInstance(this.rowHasChanged, this._hasStableIds ? this.getStableId : undefined);
         const newSize = newData.length;
         const iterCount = Math.min(this._size, newSize);
@@ -68,7 +69,9 @@ export abstract class BaseDataProvider {
         } else {
             dp._firstIndexToProcess = Math.max(Math.min(firstModifiedIndex, this._data.length), 0);
         }
+        // DEBUG: console.log("cloning rows firstModifiedIndex " + firstModifiedIndex);
         if (dp._firstIndexToProcess !== this._data.length) {
+            // DEBUG: console.log("cloning rows says needs change");
             dp._requiresDataChangeHandling = true;
         }
         dp._data = newData;
