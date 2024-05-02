@@ -329,9 +329,9 @@ export default class VirtualRenderer {
                     }
                 } else {
                     keyToStableIdMap[stableIdItem.key] = key;
-                    if (this._renderStack[stableIdItem.key].dataIndex === preservedIndex) {
-                        preservedStableId = key;
-                    }
+                }
+                if (this._renderStack[stableIdItem.key]?.dataIndex === preservedIndex) {
+                    preservedStableId = key;
                 }
             }
         }
@@ -377,16 +377,32 @@ export default class VirtualRenderer {
             }
         }
 
-        // If the preserved stable id is still visible, we preserve the position of the stable id
-        if (this._layoutManager && (preservedStableId !== null) && (preservedStableId in activeStableIds)) {
-            const shiftPreservedIndex = activeStableIds[preservedStableId];
-            this._layoutManager.shiftPreservedIndex(preservedIndex, shiftPreservedIndex);
-            if (this._shiftPreservedLayouts) {
-                this._layoutManager.shiftLayouts(shiftPreservedIndex - preservedIndex);
         // DEBUG: console.log("handled data change; preservedStableId = " + preservedStableId);
+
+        // If the preserved stable id is still in the list, we preserve the position of the stable id
+        if (this._layoutManager && (preservedStableId !== null)) {
+            let shiftPreservedIndex = -1;
+            if (preservedStableId in activeStableIds) {
                 // DEBUG: console.log("stable still visible");
+                shiftPreservedIndex = activeStableIds[preservedStableId];
+            } else {
                 // DEBUG: console.log("stable not visible, search");
+                // if the item has moved far away from the current view window, the layoutManager shiftPreservedIndex
+                // still works, but will cause the render stack to be recalculated. preferrably, we should check this
+                // before the above render stack logic in the future.
+                for (let i = 0; i < maxIndex; i++) {
+                    if (getStableId(i) === preservedStableId) {
                         // DEBUG: console.log("stable found");
+                        shiftPreservedIndex = i;
+                        break;
+                    }
+		}
+            }
+            if (shiftPreservedIndex !== -1) {
+                this._layoutManager.shiftPreservedIndex(preservedIndex, shiftPreservedIndex);
+                if (this._shiftPreservedLayouts) {
+                    this._layoutManager.shiftLayouts(shiftPreservedIndex - preservedIndex);
+                }
             }
         }
 

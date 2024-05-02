@@ -240,6 +240,9 @@ export class WrapGridLayoutManager extends LayoutManager {
         this._pendingRelayout = false;
 
         // DEBUG: console.log('relayout', startIndex, this._fixIndex);
+        if (this._pendingFixY !== undefined && startIndex > this._fixIndex) {
+            startIndex = this._fixIndex;
+        }
         startIndex = this._locateFirstNeighbourIndex(startIndex);
         let startX = 0;
         let startY = 0;
