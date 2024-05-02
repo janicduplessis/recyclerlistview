@@ -86,7 +86,6 @@ export class WrapGridLayoutManager extends LayoutManager {
     private _isHorizontal: boolean;
     private _layouts: Layout[];
 
-    private _anchorCount: number = 0;
     private _fixIndex: number = -1;
     private _pendingFixY: number | undefined = undefined;
     private _holdingIndex: boolean = false;
@@ -184,13 +183,6 @@ export class WrapGridLayoutManager extends LayoutManager {
             if (dim.height !== layout.height) {
                 this._pendingRelayout = true;
             }
-            if ((!layout.isOverridden) && index === this._anchorCount) {
-                let i = this._anchorCount;
-                while (this._layouts[i + 1] && this._layouts[i + 1].isOverridden) {
-                    i++;
-                }
-                this._anchorCount = i + 1;
-            }
             // DEBUG: console.log('override item (' + index + ') ' + layout.height + ' -> ' + dim.height);
             layout.isOverridden = true;
             layout.width = dim.width;
@@ -226,13 +218,6 @@ export class WrapGridLayoutManager extends LayoutManager {
             }
         }
         const count = this._layouts.length;
-        if (this._anchorCount < count && this._layouts[this._anchorCount].isOverridden) {
-            let i = this._anchorCount;
-            while (i + 1 < count && this._layouts[i + 1].isOverridden) {
-                i++;
-            }
-            this._anchorCount = i + 1;
-        }
 
         if (inconsistentIndex > -1) {
             this._pendingRelayout = true;
@@ -456,11 +441,6 @@ export class WrapGridLayoutManager extends LayoutManager {
                     (innerScrollComponent as any).setNativeProps({ style: { height: this._totalHeight } });
                     // DEBUG: console.log('0 refix measuremdnts', this._totalHeight);
                 }
-
-                // reset fix
-                if (this._fixIndex < this._anchorCount) {
-                    this._fixIndex = -1;
-                }
             }
 
         }
@@ -481,7 +461,7 @@ export class WrapGridLayoutManager extends LayoutManager {
     private _preparePreservedIndex = (firstVisibleIndex: number, lastVisibleIndex: number, firstEngagedIndex: number, lastEngagedIndex: number): void => {
         // DEBUG: console.log('attempting to fit fixIndex from ' + this._fixIndex + ' in engaged ' + firstEngagedIndex + '-' + lastEngagedIndex + ', visible ' +  firstVisibleIndex + '-' + lastVisibleIndex);
         let index = -1;
-        if (this._fixIndex < firstVisibleIndex && (this._fixIndex > -1 || firstVisibleIndex >= this._anchorCount)) {
+        if (this._fixIndex < firstVisibleIndex) {
             // DEBUG: console.log('fit fixIndex up');
             // DEBUG: console.log('searching down for closest rendered item');
             let i = 0;

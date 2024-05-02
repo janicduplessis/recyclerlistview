@@ -150,6 +150,10 @@ export default class VirtualRenderer {
         if (this._params) {
             this._layoutManager.relayoutFromIndex(0, this._params.itemCount);
         }
+        if (this._preserveVisiblePosition) {
+	    layoutManager.holdPreservedIndex(0);
+	    layoutManager.unholdPreservedIndex();
+	}
     }
 
     public setLayoutProvider(layoutProvider: BaseLayoutProvider): void {
