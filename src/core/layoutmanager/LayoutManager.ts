@@ -210,9 +210,10 @@ export class WrapGridLayoutManager extends LayoutManager {
                     }
                 }
 
-                layout.isOverridden = true;
                 layout.height = height;
+
                 if (!offsetsStale) {
+                    layout.isOverridden = true;
                     layout.y = y;
                 }
             }

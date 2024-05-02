@@ -1036,16 +1036,16 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
     
 	if (!offsetsStale) {
             this._pendingAutoLayout = false;
-    
-            if (relayoutIndex > -1) {
-                if (this._relayoutReqIndex === -1) {
-                    this._relayoutReqIndex = relayoutIndex;
-                } else {
-                    this._relayoutReqIndex = Math.min(this._relayoutReqIndex, relayoutIndex);
-                }
-                this._queueStateRefresh();
-            }
 	}
+
+        if (relayoutIndex > -1) {
+            if (this._relayoutReqIndex === -1) {
+                this._relayoutReqIndex = relayoutIndex;
+            } else {
+                this._relayoutReqIndex = Math.min(this._relayoutReqIndex, relayoutIndex);
+            }
+            this._queueStateRefresh();
+        }
     } : undefined;
 
     private _queueLayoutRefix = debounce(() => {
