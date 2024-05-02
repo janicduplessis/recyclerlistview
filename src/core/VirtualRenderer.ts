@@ -151,9 +151,9 @@ export default class VirtualRenderer {
             this._layoutManager.relayoutFromIndex(0, this._params.itemCount);
         }
         if (this._preserveVisiblePosition) {
-	    layoutManager.holdPreservedIndex(0);
-	    layoutManager.unholdPreservedIndex();
-	}
+            layoutManager.holdPreservedIndex(0);
+            layoutManager.unholdPreservedIndex();
+        }
     }
 
     public setLayoutProvider(layoutProvider: BaseLayoutProvider): void {
@@ -396,7 +396,7 @@ export default class VirtualRenderer {
                         shiftPreservedIndex = i;
                         break;
                     }
-		}
+                }
             }
             if (shiftPreservedIndex !== -1) {
                 this._layoutManager.shiftPreservedIndex(preservedIndex, shiftPreservedIndex);

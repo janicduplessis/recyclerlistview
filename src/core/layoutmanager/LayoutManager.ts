@@ -222,7 +222,7 @@ export class WrapGridLayoutManager extends LayoutManager {
 
         if (inconsistentIndex > -1) {
             this._pendingRelayout = true;
-        } 
+        }
 
         // DEBUG: console.log('inconsistent from ' + inconsistentIndex);
         return inconsistentIndex;
@@ -397,7 +397,7 @@ export class WrapGridLayoutManager extends LayoutManager {
             const refixOffset = - this._layouts[0].y;
 
             // DEBUG: console.log('attempt refix', refixOffset);
-    
+
             // if the content height is not as tall as the scroll destination, scrollTo will fail
             // so, we must first set the height the content before we do the rest of refix
             if (scrollHeight < Math.min(scrollOffset, this._totalHeight) + refixOffset) {
@@ -413,7 +413,7 @@ export class WrapGridLayoutManager extends LayoutManager {
                         this._layouts[i].y += refixOffset;
                     }
                     this._totalHeight += refixOffset;
-    
+
                     // DEBUG: console.log('non-zero refix measuremdnts', this._totalHeight);
                     if (Math.abs(refixOffset) >= 1) {
                         (innerScrollComponent as any).setNativeProps({ style: { height: this._totalHeight } });
