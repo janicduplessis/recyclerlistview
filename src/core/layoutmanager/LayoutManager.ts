@@ -221,7 +221,7 @@ export class WrapGridLayoutManager extends LayoutManager {
 
         if (inconsistentIndex > -1) {
             this._pendingRelayout = true;
-        }
+        } 
 
         // DEBUG: console.log('inconsistent from ' + inconsistentIndex);
         return inconsistentIndex;
@@ -391,9 +391,7 @@ export class WrapGridLayoutManager extends LayoutManager {
     ): void {
         if (this._pendingRelayout) {
             // DEBUG: console.log('pending retrigger refix');
-            setTimeout(() => {
-                retrigger();
-            }, 15);
+            retrigger();
         } else {
             const refixOffset = - this._layouts[0].y;
 
