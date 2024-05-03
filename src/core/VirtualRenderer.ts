@@ -277,6 +277,10 @@ export default class VirtualRenderer {
 
     //Further optimize in later revision, pretty fast for now considering this is a low frequency event
     public handleDataSetChange(newDataProvider: BaseDataProvider, scrollOffset: number): void {
+        const preservePosition = this._preserveVisiblePosition && (this._startEdgePreserved || scrollOffset > this._edgeVisibleThreshold)
+        const shiftStartEdge = this._preserveVisiblePosition && (!this._startEdgePreserved && scrollOffset <= this._edgeVisibleThreshold)
+        const shiftLayouts = this._preserveVisiblePosition && this._shiftPreservedLayouts
+
         const getStableId = newDataProvider.getStableId;
         const maxIndex = newDataProvider.getSize() - 1;
         const activeStableIds: { [key: string]: number } = {};
@@ -291,7 +295,7 @@ export default class VirtualRenderer {
 
         //Compute active stable ids and stale active keys and resync render stack
         let preservedIndex = -1;
-        if (this._preserveVisiblePosition && (this._startEdgePreserved || scrollOffset > this._edgeVisibleThreshold) && this._layoutManager) {
+        if ((shiftLayouts || preservePosition) && this._layoutManager) {
             preservedIndex = this._layoutManager.preservedIndex();
         }
         let preservedStableId: string | null = null;
@@ -322,7 +326,8 @@ export default class VirtualRenderer {
 
                     const stackItem = this._renderStack[stableIdItem.key];
                     const dataIndex = stackItem ? stackItem.dataIndex : undefined;
-                    if ((!this._preserveVisiblePosition || !this._shiftPreservedLayouts) &&
+                    // TODO -- take removed layouts into consideration for _layoutManager.shiftLayouts
+                    if (!shiftLayouts &&
                         !ObjectUtil.isNullOrUndefined(dataIndex) && dataIndex <= maxIndex &&
                         this._layoutManager) {
                         this._layoutManager.removeLayout(dataIndex);
@@ -378,30 +383,36 @@ export default class VirtualRenderer {
         }
 
         // If the preserved stable id is still in the list, we preserve the position of the stable id
-        if (this._layoutManager && (preservedStableId !== null)) {
-            let shiftPreservedIndex = -1;
-            if (preservedStableId in activeStableIds) {
-                shiftPreservedIndex = activeStableIds[preservedStableId];
-            } else {
-                // if the item has moved far away from the current view window, the layoutManager shiftPreservedIndex
-                // still works, but will cause the render stack to be recalculated. preferrably, we should check this
-                // before the above render stack logic in the future.
-                for (let i = 0; i < maxIndex; i++) {
-                    if (getStableId(i) === preservedStableId) {
-                        // DEBUG: console.log("stable found");
-                        shiftPreservedIndex = i;
-                        break;
+        if (this._layoutManager) {
+            if (shiftStartEdge) {
+                this._layoutManager.shiftPreservedIndex(0, 0);
+            }
+            if (preservedStableId !== null) {
+                let shiftPreservedIndex = -1;
+                if (preservedStableId in activeStableIds) {
+                    shiftPreservedIndex = activeStableIds[preservedStableId];
+                } else {
+                    // if the item has moved far away from the current view window, the layoutManager shiftPreservedIndex
+                    // still works, but will cause the render stack to be recalculated. preferrably, we should check this
+                    // before the above render stack logic in the future.
+                    for (let i = 0; i < maxIndex; i++) {
+                        if (getStableId(i) === preservedStableId) {
+                            // DEBUG: console.log("stable found");
+                            shiftPreservedIndex = i;
+                            break;
+                        }
+                    }
+                }
+                if (shiftPreservedIndex !== -1) {
+                    if (preservePosition) {
+                        this._layoutManager.shiftPreservedIndex(preservedIndex, shiftPreservedIndex);
+                    }
+                    if (shiftLayouts) {
+                        this._layoutManager.shiftLayouts(shiftPreservedIndex - preservedIndex);
                     }
                 }
             }
-            if (shiftPreservedIndex !== -1) {
-                this._layoutManager.shiftPreservedIndex(preservedIndex, shiftPreservedIndex);
-                if (this._shiftPreservedLayouts) {
-                    this._layoutManager.shiftLayouts(shiftPreservedIndex - preservedIndex);
-                }
-            }
         }
-
     }
 
     private _getCollisionAvoidingKey(): string {
