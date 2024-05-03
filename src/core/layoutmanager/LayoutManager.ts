@@ -111,9 +111,6 @@ export class WrapGridLayoutManager extends LayoutManager {
                 const lastVisibleIndex = visibleIndexes[visibleIndexes.length - 1];
                 const firstEngagedIndex = engagedIndexes[0];
                 const lastEngagedIndex = engagedIndexes[engagedIndexes.length - 1];
-                // DEBUG: console.log('visible is ' + firstVisibleIndex + '-' + lastVisibleIndex + ' ; engaged is ' + firstEngagedIndex + '-' + lastEngagedIndex );
-
-                // DEBUG: console.log('attempting to fit fixIndex from ' + this._fixIndex + ' in engaged ' + firstEngagedIndex + '-' + lastEngagedIndex + ', visible ' +  firstVisibleIndex + '-' + lastVisibleIndex);
                 this._preparePreservedIndex(firstVisibleIndex, lastVisibleIndex, firstEngagedIndex, lastEngagedIndex);
             }
         }
@@ -129,7 +126,6 @@ export class WrapGridLayoutManager extends LayoutManager {
         this._holdingIndex = false;
     }
     public shiftPreservedIndex(index: number, shiftPreservedIndex: number): void {
-        // DEBUG: console.log("stable shifting from " + index + " to " + shiftPreservedIndex);
         this._fixIndex = shiftPreservedIndex;
         this._pendingFixY = this._layouts[index].y;
     }
@@ -144,7 +140,6 @@ export class WrapGridLayoutManager extends LayoutManager {
         // fill in invalid placeholder values; these will be properly calculated during relayout
 
         this._pendingRelayout = true;
-        // DEBUG: console.log('shift layouts by ' + indexOffset);
 
         if (indexOffset > 0) {
             const layoutCount = this._layouts.length;
@@ -183,7 +178,6 @@ export class WrapGridLayoutManager extends LayoutManager {
             if (dim.height !== layout.height) {
                 this._pendingRelayout = true;
             }
-            // DEBUG: console.log('override item (' + index + ') ' + layout.height + ' -> ' + dim.height);
             layout.isOverridden = true;
             layout.width = dim.width;
             layout.height = dim.height;
@@ -196,11 +190,8 @@ export class WrapGridLayoutManager extends LayoutManager {
         const renderedLayouts = layoutsInfo.layouts;
         for (let i = 0; i < renderedLayouts.length; i++) {
             const { key, y, height } = renderedLayouts[i];
-
             const layout = this._layouts[key];
             if (layout) {
-                // DEBUG: console.log('rendered layout (' + key + ') ; height ' + height + ' at ' + y + ' ; was estimated at ' + this._layouts[key].y);
-
                 // callers should provide renderedLayouts in sorted order
                 if (inconsistentIndex === -1) {
                     if (Math.abs(height - layout.height) > 1) {
@@ -219,15 +210,11 @@ export class WrapGridLayoutManager extends LayoutManager {
             }
         }
         const count = this._layouts.length;
-
         if (inconsistentIndex > -1) {
             this._pendingRelayout = true;
         }
-
-        // DEBUG: console.log('inconsistent from ' + inconsistentIndex);
         return inconsistentIndex;
     }
-
     public setMaxBounds(itemDim: Dimension): void {
         if (this._isHorizontal) {
             itemDim.height = Math.min(this._window.height, itemDim.height);
@@ -240,7 +227,6 @@ export class WrapGridLayoutManager extends LayoutManager {
     public relayoutFromIndex(startIndex: number, itemCount: number): void {
         this._pendingRelayout = false;
 
-        // DEBUG: console.log('relayout', startIndex, this._fixIndex);
         if (this._pendingFixY !== undefined && startIndex > this._fixIndex) {
             startIndex = this._fixIndex;
         }
@@ -391,17 +377,13 @@ export class WrapGridLayoutManager extends LayoutManager {
         retrigger: () => void,
     ): void {
         if (this._pendingRelayout) {
-            // DEBUG: console.log('pending retrigger refix');
             retrigger();
         } else {
             const refixOffset = - this._layouts[0].y;
 
-            // DEBUG: console.log('attempt refix', refixOffset);
-
             // if the content height is not as tall as the scroll destination, scrollTo will fail
             // so, we must first set the height the content before we do the rest of refix
             if (scrollHeight < Math.min(scrollOffset, this._totalHeight) + refixOffset) {
-                // DEBUG: console.log('retrigger refix');
                 (innerScrollComponent as any).setNativeProps({ style: { height: this._totalHeight + refixOffset } });
                 (innerScrollComponent as any).measure((x: number, y: number, width: number, height: number, pageX: number, pageY: number) => {
                     setScrollHeight(height);
@@ -414,7 +396,6 @@ export class WrapGridLayoutManager extends LayoutManager {
                     }
                     this._totalHeight += refixOffset;
 
-                    // DEBUG: console.log('non-zero refix measuremdnts', this._totalHeight);
                     if (Math.abs(refixOffset) >= 1) {
                         (innerScrollComponent as any).setNativeProps({ style: { height: this._totalHeight } });
                         for (let i = 0; i < indexes.length; i++) {
@@ -437,11 +418,9 @@ export class WrapGridLayoutManager extends LayoutManager {
                         (viewabilityTracker as any)._engagedWindow.start += refixOffset;
                         (viewabilityTracker as any)._engagedWindow.end += refixOffset;
                         (viewabilityTracker as any)._actualOffset += refixOffset;
-                        // DEBUG: console.log('non-zero refix measuremdnts', (viewabilityTracker as any)._currentOffset , (viewabilityTracker as any)._maxOffset , (viewabilityTracker as any)._visibleWindow.start , (viewabilityTracker as any)._visibleWindow.end , (viewabilityTracker as any)._engagedWindow.start , (viewabilityTracker as any)._engagedWindow.end , (viewabilityTracker as any)._actualOffset);
                     }
                 } else {
                     (innerScrollComponent as any).setNativeProps({ style: { height: this._totalHeight } });
-                    // DEBUG: console.log('0 refix measuremdnts', this._totalHeight);
                 }
             }
 
@@ -461,11 +440,8 @@ export class WrapGridLayoutManager extends LayoutManager {
     // When the above considerations cannot be met, we prefer to leave _fixIndex unchanged until they can be, as long as the previous _fixIndex
     // is still admissable.
     private _preparePreservedIndex = (firstVisibleIndex: number, lastVisibleIndex: number, firstEngagedIndex: number, lastEngagedIndex: number): void => {
-        // DEBUG: console.log('attempting to fit fixIndex from ' + this._fixIndex + ' in engaged ' + firstEngagedIndex + '-' + lastEngagedIndex + ', visible ' +  firstVisibleIndex + '-' + lastVisibleIndex);
         let index = -1;
         if (this._fixIndex < firstVisibleIndex) {
-            // DEBUG: console.log('fit fixIndex up');
-            // DEBUG: console.log('searching down for closest rendered item');
             let i = 0;
             let j = 1;
             for (; i < 1 + firstVisibleIndex - firstEngagedIndex; i++) {
@@ -474,7 +450,6 @@ export class WrapGridLayoutManager extends LayoutManager {
                     break;
                 }
             }
-            // DEBUG: console.log('searching up for closest rendered item');
             for (; j < Math .min (i, 1 + lastEngagedIndex - firstVisibleIndex); j++) {
                 if (this._layouts[firstVisibleIndex + j].isOverridden) {
                     index = 0;
@@ -491,8 +466,6 @@ export class WrapGridLayoutManager extends LayoutManager {
                 index = firstVisibleIndex;
             }
         } else if (this._fixIndex > lastVisibleIndex) {
-            // DEBUG: console.log('fit fixIndex down');
-            // DEBUG: console.log('searching up for closest rendered item');
             let i = 0;
             let j = 1;
             for (; i < 1 + lastEngagedIndex - lastVisibleIndex; i++) {
@@ -501,7 +474,6 @@ export class WrapGridLayoutManager extends LayoutManager {
                     break;
                 }
             }
-            // DEBUG: console.log('searching down for closest rendered item');
             for (; j < Math .min (i, 1 + lastVisibleIndex - firstEngagedIndex); j++) {
                 if (this._layouts[lastVisibleIndex - j].isOverridden) {
                     index = 0;
@@ -520,13 +492,6 @@ export class WrapGridLayoutManager extends LayoutManager {
         }
 
         if (index > -1) {
-            // DEBUG: if (index > this._fixIndex) {
-                // DEBUG: console.log('moving fixindex up from ' + this._fixIndex + ' to ' + index);
-                // DEBUG: for (let i = Math.max(this._fixIndex,0); i <= index; i++) { if (!this._layouts[i].isOverridden) {console.log(i + ' not yet overriden (estimate ' + this._layouts[i].height + ')');} }
-            // DEBUG: } else if (index < this._fixIndex) {
-                // DEBUG: console.log('moving fixindex down from ' + this._fixIndex + ' to ' + index);
-                // DEBUG: for (let i = this._fixIndex; i >= index; i --) { if (!this._layouts[i].isOverridden) {console.log(i + ' not yet overriden (estimate ' + this._layouts[i].height + ')');} }
-            // DEBUG: }
             this._fixIndex = index;
         }
     }

@@ -377,16 +377,12 @@ export default class VirtualRenderer {
             }
         }
 
-        // DEBUG: console.log("handled data change; preservedStableId = " + preservedStableId);
-
         // If the preserved stable id is still in the list, we preserve the position of the stable id
         if (this._layoutManager && (preservedStableId !== null)) {
             let shiftPreservedIndex = -1;
             if (preservedStableId in activeStableIds) {
-                // DEBUG: console.log("stable still visible");
                 shiftPreservedIndex = activeStableIds[preservedStableId];
             } else {
-                // DEBUG: console.log("stable not visible, search");
                 // if the item has moved far away from the current view window, the layoutManager shiftPreservedIndex
                 // still works, but will cause the render stack to be recalculated. preferrably, we should check this
                 // before the above render stack logic in the future.
@@ -441,11 +437,8 @@ export default class VirtualRenderer {
         const count = notNow.length;
         let resolvedKey;
         let disengagedIndex = 0;
-        // DEBUG: console.log("engaged items changed");
-        // DEBUG: console.log("recycling enabled? " + this._isRecyclingEnabled);
         if (this._isRecyclingEnabled) {
             for (let i = 0; i < count; i++) {
-                // DEBUG: console.log("disengaged " + notNow[i]);
                 disengagedIndex = notNow[i];
                 delete this._engagedIndexes[disengagedIndex];
                 if (this._params && disengagedIndex < this._params.itemCount) {
@@ -469,10 +462,8 @@ export default class VirtualRenderer {
             this._layoutManager.preserveIndexes(visibleIndexes, engagedIndexes);
         }
     }
-
     //Updates render stack and reports whether anything has changed
     private _updateRenderStack(itemIndexes: number[]): boolean {
-        // DEBUG: console.log("update?");
         this._markDirty = false;
         const count = itemIndexes.length;
         let index = 0;
@@ -482,7 +473,6 @@ export default class VirtualRenderer {
             this._engagedIndexes[index] = 1;
             this.syncAndGetKey(index);
             hasRenderStackChanged = this._markDirty;
-            // DEBUG: console.log("check ", index, hasRenderStackChanged);
         }
         this._markDirty = false;
         return hasRenderStackChanged;
