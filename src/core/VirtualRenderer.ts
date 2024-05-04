@@ -277,9 +277,22 @@ export default class VirtualRenderer {
 
     //Further optimize in later revision, pretty fast for now considering this is a low frequency event
     public handleDataSetChange(newDataProvider: BaseDataProvider, scrollOffset: number): void {
-        const preservePosition = this._preserveVisiblePosition && (this._startEdgePreserved || scrollOffset > this._edgeVisibleThreshold)
-        const shiftStartEdge = this._preserveVisiblePosition && (!this._startEdgePreserved && scrollOffset <= this._edgeVisibleThreshold)
-        const shiftLayouts = this._preserveVisiblePosition && this._shiftPreservedLayouts
+        let preservePosition = false;
+        let shiftStartEdge = false;
+        let shiftLayouts = false;
+        let preservedIndex = -1;
+        let preservedStableId: string | null = null;
+
+        if (this._preserveVisiblePosition && this._layoutManager) {
+            const startEdgeThreshold = this._layoutManager.getLayouts()[0].y + this._edgeVisibleThreshold;
+
+            preservePosition = this._startEdgePreserved || scrollOffset > startEdgeThreshold;
+            shiftStartEdge = !this._startEdgePreserved && scrollOffset <= startEdgeThreshold;
+            shiftLayouts = this._shiftPreservedLayouts;
+            if (shiftLayouts || preservePosition) {
+                preservedIndex = this._layoutManager.preservedIndex();
+            }
+        }
 
         const getStableId = newDataProvider.getStableId;
         const maxIndex = newDataProvider.getSize() - 1;
@@ -294,11 +307,6 @@ export default class VirtualRenderer {
         }
 
         //Compute active stable ids and stale active keys and resync render stack
-        let preservedIndex = -1;
-        if ((shiftLayouts || preservePosition) && this._layoutManager) {
-            preservedIndex = this._layoutManager.preservedIndex();
-        }
-        let preservedStableId: string | null = null;
         for (const key in this._renderStack) {
             if (this._renderStack.hasOwnProperty(key)) {
                 const index = this._renderStack[key].dataIndex;
