@@ -187,6 +187,7 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
     private _isEdgeVisible: boolean = true;
     private _autoLayout: boolean = false;
     private _pendingAutoLayout: boolean = true;
+    private _baseAutoLayoutId: number = 0x00000000;
     private _autoLayoutId: number = 0x00000000;
     private _holdTimer?: number;
 
@@ -376,7 +377,10 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
                 if (preserveVisiblePosition && layoutManager) {
                     layoutManager.holdPreservedIndex(relativeIndex);
                     if (this._autoLayout) {
-                        this._autoLayoutId = (this._autoLayoutId + 1) & 0xFFFFFFFF;
+                        this._autoLayoutId = (this._autoLayoutId + 1) & 0x7FFFFFFF;
+			if (this._autoLayoutId === this._baseAutoLayoutId) {
+			    this._baseAutoLayoutId = (this._baseAutoLayoutId ^ 0x40000000) & 0x7FFFFFFF;
+			}
                         (this._innerScrollComponent as any).setNativeProps({ preservedIndex: relativeIndex, autoLayoutId: this._autoLayoutId });
                     }
                     if (animate) {
@@ -594,6 +598,8 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
         if (newProps.dataProvider.hasStableIds() && this.props.dataProvider !== newProps.dataProvider) {
             if (newProps.dataProvider.requiresDataChangeHandling()) {
                 this._virtualRenderer.handleDataSetChange(newProps.dataProvider, this._scrollOffset);
+                this._autoLayoutId = (this._autoLayoutId + 1) & 0x7FFFFFFF;
+		this._baseAutoLayoutId = this._autoLayoutId;
             } else if (this._virtualRenderer.hasPendingAnimationOptimization()) {
                 console.warn(Messages.ANIMATION_ON_PAGINATION); //tslint:disable-line
             }
@@ -976,25 +982,36 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
         }
     }
     private _onAutoLayout = this.props.nonDeterministicMode === "autolayout" ? (rawEvent: AutoLayoutEvent): void => {
-	const offsetsStale = this._autoLayoutId !== rawEvent.nativeEvent.autoLayoutId;
+	const autoLayoutId = rawEvent.nativeEvent.autoLayoutId;
+	const offsetsStale = this._autoLayoutId !== autoLayoutId;
+	const offsetsValid = (
+	    !offsetsStale ||
+   	        (this._autoLayoutId >= this._baseAutoLayoutId ? (
+		    this._autoLayoutId > autoLayoutId && autoLayoutId >= this._baseAutoLayoutId
+		) : (
+		    this._autoLayoutId > autoLayoutId || autoLayoutId >= this._baseAutoLayoutId
+		))
+	);
 
-        // cannot be null here
-        const layoutManager = this._virtualRenderer.getLayoutManager() as LayoutManager;
-        const renderedLayouts = rawEvent.nativeEvent;
-        const relayoutIndex = layoutManager.overrideLayouts(renderedLayouts, offsetsStale);
-    
-	if (!offsetsStale) {
-            this._pendingAutoLayout = false;
-	}
-
-        if (relayoutIndex > -1) {
-            if (this._relayoutReqIndex === -1) {
-                this._relayoutReqIndex = relayoutIndex;
-            } else {
-                this._relayoutReqIndex = Math.min(this._relayoutReqIndex, relayoutIndex);
+	if (offsetsValid) {
+            // cannot be null here
+            const layoutManager = this._virtualRenderer.getLayoutManager() as LayoutManager;
+            const renderedLayouts = rawEvent.nativeEvent;
+            const relayoutIndex = layoutManager.overrideLayouts(renderedLayouts, offsetsStale);
+        
+            if (!offsetsStale) {
+                this._pendingAutoLayout = false;
             }
-            this._queueStateRefresh();
-        }
+    
+            if (relayoutIndex > -1) {
+                if (this._relayoutReqIndex === -1) {
+                    this._relayoutReqIndex = relayoutIndex;
+                } else {
+                    this._relayoutReqIndex = Math.min(this._relayoutReqIndex, relayoutIndex);
+                }
+                this._queueStateRefresh();
+            }
+	}
     } : undefined;
     private _queueLayoutRefix = debounce(() => {
         if (this._isMounted) {
@@ -1042,7 +1059,10 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
                         () => {
                             if (this._autoLayout) {
                                 this._pendingAutoLayout = true;
-                                this._autoLayoutId = (this._autoLayoutId + 1) & 0xFFFFFFFF;
+                                this._autoLayoutId = (this._autoLayoutId + 1) & 0x7FFFFFFF;
+		                if (this._autoLayoutId === this._baseAutoLayoutId) {
+		                    this._baseAutoLayoutId = (this._baseAutoLayoutId ^ 0x40000000) & 0x7FFFFFFF;
+		                }
                                 (_innerScrollComponent as any).setNativeProps({ autoLayoutId: this._autoLayoutId });
                             }
                         },
