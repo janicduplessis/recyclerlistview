@@ -395,8 +395,10 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
                             if (Math.abs(this._scrollOffset - y) < 1) {
                                 const visibleIndexes = virtualRenderer.getViewabilityTracker()?.getVisibleIndexes();
                                 if (visibleIndexes) {
+                                    // Even though we have held the index, it may have been shifted by data changes
+                                    const preservedIndex = layoutManager.preservedIndex();
                                     for (let i = 0; i < visibleIndexes.length; i++) {
-                                        if (visibleIndexes[i] === relativeIndex) {
+                                        if (visibleIndexes[i] === preservedIndex) {
                                             clearInterval(this._holdTimer);
                                             this._holdTimer = undefined;
                                             // Give a little time (for low-end devices) such that all scroll events have fired
