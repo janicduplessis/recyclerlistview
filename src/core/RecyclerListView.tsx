@@ -387,8 +387,8 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
                     if (animate) {
                         // the amount of time taken for the animation is variable
                         // on ios, the animation is documented to be 'constant rate' at an unspecified rate, so the time is proportional to the length of scroll
-                        // on android, the only relevant information the author has discovered is that default animation duration is 250.
-                        // therefore, we hold until relativeIndex comes into view + 1 throttle period
+                        // on android, the only relevant information the author has discovered is that default animation duration is 250ms.
+                        // therefore, we hold until relativeIndex comes into view + a little time (especially for low-end devices) such that all scroll events have fired
                         if (this._holdTimer !== undefined) {
                             clearInterval(this._holdTimer);
                         }
@@ -402,7 +402,6 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
                                         if (visibleIndexes[i] === preservedIndex) {
                                             clearInterval(this._holdTimer);
                                             this._holdTimer = undefined;
-                                            // Give a little time (for low-end devices) such that all scroll events have fired
                                             setTimeout(() => {
                                                 layoutManager.unholdPreservedIndex();
                                                 this._holdStableId = undefined;
@@ -414,7 +413,6 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
                         // We check every once in a while (three frames)
                         }, 48);
                     } else {
-                        // Give a little time (for low-end devices) such that all scroll events have fired
                         setTimeout(() => {
                             layoutManager.unholdPreservedIndex();
                             this._holdStableId = undefined;
@@ -1180,7 +1178,7 @@ RecyclerListView.propTypes = {
     //animations are JS driven to avoid workflow interference. Also, please note LayoutAnimation is buggy on Android.
     itemAnimator: PropTypes.instanceOf(BaseItemAnimator),
 
-    // Enables an alternate layout algorithm when the list scrolls into regions where item heights are not precisely known.
+    // Enables an alternate layout algorithm which is superior when the list has large regions where item heights are not precisely known.
     // The alternate algorithm calculates layouts by assuming that the offset of an item chosen from the visible region is correct and
     // to be fixed at its current position, as opposed to the default algorithm which assumes that the layouts in front of the
     // visible and engaged region is correct and fixed to the start of the scroller. This algorithm works well when the estimated size of 
