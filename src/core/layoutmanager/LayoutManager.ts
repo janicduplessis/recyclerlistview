@@ -59,7 +59,7 @@ export abstract class LayoutManager {
 
     public abstract refix(
         virtualRenderer: VirtualRenderer,
-        innerScrollComponent: React.Component,
+        innerScrollComponent: any,
         indexes: Array<number | undefined>,
         itemCount: number,
         scrollOffset: number,
@@ -366,7 +366,7 @@ export class WrapGridLayoutManager extends LayoutManager {
 
     public refix(
         virtualRenderer: VirtualRenderer,
-        innerScrollComponent: React.Component,
+        innerScrollComponent: any,
         indexes: Array<number | undefined>,
         itemCount: number,
         scrollOffset: number,
@@ -384,8 +384,8 @@ export class WrapGridLayoutManager extends LayoutManager {
             // if the content height is not as tall as the scroll destination, scrollTo will fail
             // so, we must first set the height the content before we do the rest of refix
             if (scrollHeight < Math.min(scrollOffset, this._totalHeight) + refixOffset) {
-                (innerScrollComponent as any).setNativeProps({ style: { height: this._totalHeight + refixOffset } });
-                (innerScrollComponent as any).measure((x: number, y: number, width: number, height: number, pageX: number, pageY: number) => {
+                innerScrollComponent.setNativeProps({ style: { height: this._totalHeight + refixOffset } });
+                innerScrollComponent.measure((x: number, y: number, width: number, height: number, pageX: number, pageY: number) => {
                     setScrollHeight(height);
                     retrigger();
                 });
@@ -397,12 +397,12 @@ export class WrapGridLayoutManager extends LayoutManager {
                     this._totalHeight += refixOffset;
 
                     if (Math.abs(refixOffset) >= 1) {
-                        (innerScrollComponent as any).setNativeProps({ style: { height: this._totalHeight } });
+                        innerScrollComponent.setNativeProps({ style: { height: this._totalHeight } });
                         for (let i = 0; i < indexes.length; i++) {
                             const index = indexes[i];
-                            if ((index !== undefined) && (innerScrollComponent as any)._children[i]) {
+                            if ((index !== undefined) && innerScrollComponent._children[i]) {
                                 const y = this._layouts[index].y;
-                                (innerScrollComponent as any)._children[i].setNativeProps({ style: { top: y } });
+                                innerScrollComponent._children[i].setNativeProps({ style: { top: y } });
                             }
                         }
                         relayout();
@@ -420,7 +420,7 @@ export class WrapGridLayoutManager extends LayoutManager {
                         (viewabilityTracker as any)._actualOffset += refixOffset;
                     }
                 } else {
-                    (innerScrollComponent as any).setNativeProps({ style: { height: this._totalHeight } });
+                    innerScrollComponent.setNativeProps({ style: { height: this._totalHeight } });
                 }
             }
 

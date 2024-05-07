@@ -174,9 +174,8 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
     private _tempDim: Dimension = { height: 0, width: 0 };
     private _initialOffset = 0;
     private _cachedLayouts?: Layout[];
-    // to be pedantic, _scrollComponent, _innerScrollComponent are not `React.Component`s
     private _scrollComponent: BaseScrollComponent | null = null;
-    private _innerScrollComponent: React.Component | null = null;
+    private _innerScrollComponent: any | null = null;
     private _windowCorrectionConfig: WindowCorrectionConfig;
 
     private _scrollOffset: number = 0;
@@ -384,7 +383,6 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
                         if (this._autoLayoutId === this._baseAutoLayoutId) {
                             this._baseAutoLayoutId = (this._baseAutoLayoutId ^ 0x40000000) & 0x7FFFFFFF;
                         }
-                        (this._innerScrollComponent as any).setNativeProps({ preservedIndex: relativeIndex, autoLayoutId: this._autoLayoutId });
                     }
                     if (animate) {
                         // the amount of time taken for the animation is variable
@@ -509,8 +507,8 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
         // scroll events.
         return (
             <ScrollComponent
-                ref={(scrollComponent) => {if (scrollComponent) {this._scrollComponent = scrollComponent as BaseScrollComponent | null}}}
-                innerRef={(innerScrollComponent: any) => {if (innerScrollComponent) {this._innerScrollComponent = innerScrollComponent as React.Component | null}}}
+                ref={(scrollComponent) => {if (scrollComponent) {this._scrollComponent = scrollComponent as BaseScrollComponent | null;}}}
+                innerRef={(innerScrollComponent: any) => {if (innerScrollComponent) {this._innerScrollComponent = innerScrollComponent;}}}
                 {...this.props}
                 {...this.props.scrollViewProps}
                 scrollOffset={this._scrollOffset}
@@ -1069,7 +1067,7 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
                                 if (this._autoLayoutId === this._baseAutoLayoutId) {
                                     this._baseAutoLayoutId = (this._baseAutoLayoutId ^ 0x40000000) & 0x7FFFFFFF;
                                 }
-                                (_innerScrollComponent as any).setNativeProps({ autoLayoutId: this._autoLayoutId });
+                                _innerScrollComponent.setNativeProps({ autoLayoutId: this._autoLayoutId });
                             }
                         },
                         () => {
