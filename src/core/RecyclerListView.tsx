@@ -191,8 +191,6 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
     private _holdTimer?: number;
     private _holdStableId?: string;
 
-    private onVisibleIndicesChanged: ((all: number[], now: number[], notNow: number[]) => void) | null = null;
-
     //If the native content container is used, then positions of the list items are changed on the native side. The animated library used
     //by the default item animator also changes the same positions which could lead to inconsistency. Hence, the base item animator which
     //does not perform any such animations will be used.
@@ -215,7 +213,6 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
         }, !props.disableRecycling
         , !!props.preserveVisiblePosition, !!props.startEdgePreserved, this._edgeVisibleThreshold
         , (props.shiftPreservedLayouts === undefined) || props.shiftPreservedLayouts);
-        this._virtualRenderer.attachVisibleItemsListener(this._onVisibleIndicesChanged);
 
         if (this.props.windowCorrectionConfig) {
             let windowCorrection;
@@ -260,7 +257,7 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
             throw new CustomError(RecyclerListViewExceptions.usingOldVisibleIndexesChangedParam);
         }
         if (newProps.onVisibleIndicesChanged) {
-            this.onVisibleIndicesChanged = newProps.onVisibleIndicesChanged!;
+            this._virtualRenderer.attachVisibleItemsListener(newProps.onVisibleIndicesChanged!);
         }
     }
 
@@ -728,7 +725,7 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
             throw new CustomError(RecyclerListViewExceptions.usingOldVisibleIndexesChangedParam);
         }
         if (props.onVisibleIndicesChanged) {
-            this.onVisibleIndicesChanged = props.onVisibleIndicesChanged!;
+            this._virtualRenderer.attachVisibleItemsListener(props.onVisibleIndicesChanged!);
         }
         this._params = {
             initialOffset: this._initialOffset ? this._initialOffset : props.initialOffset,
@@ -954,11 +951,6 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
         this._queueLayoutRefix();
     }, 6)
 
-    private _onVisibleIndicesChanged = (all: number[], now: number[], notNow: number[]): void => {
-        if (this.onVisibleIndicesChanged) {
-            this.onVisibleIndicesChanged!(all, now, notNow);
-        }
-    }
     private _processOnEndReached(): void {
         if (this.props.onEndReached && this._virtualRenderer) {
             const layout = this._virtualRenderer.getLayoutDimension();
