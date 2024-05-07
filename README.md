@@ -20,7 +20,7 @@ For a long time, list rendering has been a sore point of React Native. Months of
 
 However, RecyclerListView/FlashList does not work well when moving into a region with many items of unknown height around the visible content, or when the list changes (e.g. new items added to the beginning of the list). When this occurs, scrolling becomes incredibly choppy, appearing to the user as if the list content is jumping around as the user scrolls. This patch solves this problem.
 
-This problem has plauged RecyclerListView/FlashList for a long time, occuring variously when the user scrolls very quickly, or when the user jumps through the list using `initialRenderIndex` or with scroll methods like `scrollToIndex`. This problem also manifests as scroll methods scrolling to the 'wrong' position. Some relevant issues include the following:
+This problem has plagued RecyclerListView/FlashList for a long time, occurring variously when the user scrolls very quickly, or when the user jumps through the list using `initialRenderIndex` or with scroll methods like `scrollToIndex`. This problem also manifests as scroll methods scrolling to the 'wrong' position. Some relevant issues include the following:
 - https://github.com/Shopify/flash-list/issues/547
 - https://github.com/Shopify/flash-list/issues/582
 - https://github.com/Flipkart/recyclerlistview/issues/241
@@ -36,7 +36,7 @@ To decide which list items to show when a user scrolls to a position, RecyclerLi
 
 RecyclerListView also provides a 'non-deterministic' rendering mode with the `forceNonDeterministicRendering` and `layoutSize` props. In this mode, RecyclerListView assumes the sizes of items to be `layoutSize`. When RecyclerListView actually renders the items, it finds out the actual size of the item, updates the internally stored item height, and relayouts the list. This works quite well when the estimates are typically close to the actual list item size.
 
-When laying out positions of list items, conceptually, RecyclerListView starts from '0' at the beginning of the list, and keeps adding up the total heights of the list items before each next item to determine its position. However, this implies that when the item heights of elements before the visible position are inaccurate and have to be updated, the positions of every item after the inaccurate estimatation changes. Layout positions are always calculated relative to the start of the list. This causes all the mentioned issues.
+When laying out positions of list items, conceptually, RecyclerListView starts from '0' at the beginning of the list, and keeps adding up the total heights of the list items before each next item to determine its position. However, this implies that when the item heights of elements before the visible position are inaccurate and have to be updated, the positions of every item after the inaccurate estimation changes. Layout positions are always calculated relative to the start of the list. This causes all the mentioned issues.
 
 (Thus solutions that do not fix layouting e.g. only fix positions of rendered content, cannot fix this issue; disagreements between the layouting and the rendered position, which may accumulate, when sufficiently serious, cause the rendered items to not even include items which should be included.)
 
@@ -69,7 +69,7 @@ In cases like refixing, we may have shifted absolute positions of items so that 
 #### Relative layouting
 We pick a single index (`_fixIndex`) close to the visible window with respect to which we do all layouting.
 
-Fixing indexes aims to avoid visible layout shifts.  To achieve this, when we select an index to fix, we aim to 1) move the fix index as little as possible, 2) prefer overriden indexes, and 3) prefer visible indexes.
+Fixing indexes aims to avoid visible layout shifts.  To achieve this, when we select an index to fix, we aim to 1) move the fix index as little as possible, 2) prefer overridden indexes, and 3) prefer visible indexes.
 1) is because users do not expect previously viewed content to shift, wheras some degree of shifting for new content is understandable
 2) is because indexes which have already been overriden have known layouts, and should be more accurate. Furthermore, when overrides come from `nonDeterministicMode="autolayout"`, overriden layouts are the rendered values, and fixing to them ensures that we do not cause rendered items to shift.
 3) is because visible content shifts occur when the total height of items between the fixed position and the rendered item changes. With `_fixIndex` close to other visible items, we minimise the number of items between the fixed position and visible content, so that we minimise the number of items that can cause total height changes.
@@ -81,7 +81,7 @@ Good selection of `_fixIndex` is crucial to ensuring the continuity of content a
 
 When a user is far from list edges, it should make no difference to him whether the first and last list items coincide with the physical start and end of the list. Only when the edge items or the physical edge is visible does any artifact become visible to the user. We attempt to refix as soon as possible, such that this will not happen.
 
-This patch waits until no scrolling is in progress, then attempts to perform refixing.
+This patch waits until no scrolling is in progress, then attempts to perform refixing. Furthermore, before refixing, we ensure that we have done relayouting based on information for rendered items from autolayout, if necessary. If refix were to be performed with layout positions that differ with rendered positions, the effect would be visually equivalent to resetting the rendered item positions to the differing values, causing layouts to jump visually.
 
 If the user scrolls very quickly and reaches list edges before refix happens, we immediately refix. In this case either the list is too short, or the list is too long. As part of the refix, `scrollTo` of the ScrollView is called, causing the scrollbars to flash, which is similar to common UI affordances that indicate new content being loaded, thus is an acceptable experience. 
 
