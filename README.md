@@ -2,13 +2,13 @@
 
 ## How to use
 
-This patch to RecyclerListView primarily adds the `preserveVisiblePosition` prop to RecyclerListView. This prop keeps the visible region of the list fixed regardless of changes in the height of items around the region and adding new data to the list.
+This package is on npm. `@irisjae/recyclerlistview` should be compatible with `recyclerlistview`, and one should be able to simply swap it out with this instead. Lists without the `preserveVisiblePosition` prop passed should almost always behave identically to `recyclerlistview`. Another method to swap `recyclerlistview` for this package without having to replace imports/requires is to replace the `recyclerlistview` version in `package.json` with `npm:@irisjae/recyclerlistview@1.0.0`.
 
-`@irisjae/recyclerlistview` should be compatible with `recyclerlistview`, and one should be able to simply swap it out with this instead. Lists without the `preserveVisiblePosition` prop passed should almost always behave identically to `recyclerlistview`.
+This patch to RecyclerListView primarily adds the `preserveVisiblePosition` prop to RecyclerListView. This prop keeps the visible region of the list fixed regardless of changes in the height of items around the region and adding new data to the list.
 
 It is recommended to use this library via `@irisjae/flash-list` if possible.
 
-### Cavaets
+### Caveats
 
 `preserveVisiblePosition` is only implemented for React Native (no web support), and for vertical lists of a single column.
 
@@ -73,7 +73,7 @@ Fixing indexes aims to avoid visible layout shifts.  To achieve this, when we se
 1) is because users do not expect previously viewed content to shift, wheras some degree of shifting for new content is understandable
 2) is because indexes which have already been overriden have known layouts, and should be more accurate. Furthermore, when overrides come from `nonDeterministicMode="autolayout"`, overriden layouts are the rendered values, and fixing to them ensures that we do not cause rendered items to shift.
 3) is because visible content shifts occur when the total height of items between the fixed position and the rendered item changes. With `_fixIndex` close to other visible items, we minimise the number of items between the fixed position and visible content, so that we minimise the number of items that can cause total height changes.
-When the above considerations cannot be met, we prefer to leave `_fixIndex` unchanged until they can be, as long as the previous _fixIndex is still admissable.
+When the above considerations cannot be met, we prefer to leave `_fixIndex` unchanged until they can be, as long as the previous `_fixIndex` is still admissable.
 
 Good selection of `_fixIndex` is crucial to ensuring the continuity of content already visible to the user. 
 
@@ -81,13 +81,13 @@ Good selection of `_fixIndex` is crucial to ensuring the continuity of content a
 
 When a user is far from list edges, it should make no difference to him whether the first and last list items coincide with the physical start and end of the list. Only when the edge items or the physical edge is visible does any artifact become visible to the user. We attempt to refix as soon as possible, such that this will not happen.
 
-This patch waits until no scrolling is in progress, then attempts to perform refixing. Furthermore, before refixing, we ensure that we have done relayouting based on information for rendered items from autolayout, if necessary. If refix were to be performed with layout positions that differ with rendered positions, the effect would be visually equivalent to resetting the rendered item positions to the differing values, causing layouts to jump visually.
+This patch waits until no scrolling is in progress, then attempts to perform refixing. Furthermore, before refixing, we ensure that we have done relayouting for rendered items using autolayout information, if necessary. If refix were to be performed with layout positions that differ with rendered positions, the effect would be visually equivalent to resetting the rendered item positions to the differing values, causing layouts to jump visually.
 
-If the user scrolls very quickly and reaches list edges before refix happens, we immediately refix. In this case either the list is too short, or the list is too long. As part of the refix, `scrollTo` of the ScrollView is called, causing the scrollbars to flash, which is similar to common UI affordances that indicate new content being loaded, thus is an acceptable experience. 
+If the user scrolls very quickly and reaches list edges before refix happens, we immediately refix. In this case either the list is too short, or the list is too long. After the refix, if the list was too short, new space will appear to be attached to the previous end of the list, along with the previously cut-off items. If the list was too long, the extra empty space on the end of the list appears to be cut away. As part of the refix, `scrollTo` of the ScrollView is called, causing the scrollbars to flash, which is similar to common UI affordances that indicate new content being loaded, thus is an acceptable experience. The threshold for being 'near' the list edge can be adjusted with the prop `edgeVisibleThreshold`.
 
 #### List changes
 
-The relative layouting mechanism allows us to easily maintain the visible content regardless of list changes (unless the content within the visible window is too, changed, of course). When list data provided to RecyclerListView changes, we search the new list for the new index with the same stableId as `_fixIndex`, and simply set the position of the new `_fixIndex` to the position of the old `_fixIndex`, and replace the `_fixIndex`, so that subsequent relayouting remain relative to the same stableId.
+The relative layouting mechanism allows us to easily maintain the visible content regardless of list changes (unless the content within the visible window is too, changed, of course). When list data provided to RecyclerListView changes, we search the new list for the new index with the same stableId as `_fixIndex`, and simply set the position of the new `_fixIndex` to the position of the old `_fixIndex`, and replace the `_fixIndex`, so that subsequent relayouting observes no difference relative to the same stableId.
 
 Another problem that occurs with list changes is that RecyclerListView associates layouts to list indexes, rather than stableIds. This is a big problem when e.g. we have a situation like `short item - very long item - short item - very long item`. Once the list is rendered, the layouts of all four items are overridden. If an item is now added to the beginning of the list, the indexes of layouts are shifted by one, and suddenly, the overridden layouts of all four items become completely inaccurate. This causes visible jumps.
 
