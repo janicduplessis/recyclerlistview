@@ -57,6 +57,7 @@ The default RecyclerListView layouting algorithm only makes use of list item hei
 This has drawbacks:
 - `onLayout` events are asynchronous and may arrive at RecyclerListView at different times. This would cause multiple relayouts, with layout jumps in between.
 - Due to various issues e.g. accumulated rounding errors, using just the rendered heights to perform calculation of positions in layouting may result in incorrect positions.
+
 This may the best we can do if we stick to using plain Views for rendering the list item container.
 
 ##### Custom list item container
