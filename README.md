@@ -128,7 +128,7 @@ The former problem is solved by simply assigning `_fixIndex` to the target item 
 
 ## Remarks
 
-Hopefully @naqvitalha finds a way to make this mechanism into RecyclerListView/FlashList core, so that I can deprecate this!
+Hopefully @naqvitalha finds a way to [make this mechanism into RecyclerListView/FlashList core](https://github.com/Shopify/flash-list/pull/1192), so that I can deprecate this!
 
 Note that apparently the lint scripts use tslint, which does not appear maintained anymore, which furthermore does not really run properly with the newer version of Typescript I put in the project. Remember to do something like `npm install --no-save typescript@3.3.1` before using the lint scripts. Since the build script also calls the lint script before building, and the code does not compile in old Typescript, the build script does not quite work. One may directly invoke tsc to build instead `rm -r dist; node_modules/.bin/tsc --outDir dist/reactnative`. 
 
