@@ -38,7 +38,7 @@ For cases when item sizes are not known in advance, RecyclerListView also provid
 
 When laying out positions of list items, conceptually, RecyclerListView starts from '0' at the beginning of the list, and keeps adding up the total heights of the list items before each next item to determine the position of the next item. However, this implies that when the item heights of elements before the visible position are inaccurate and have to be updated, the positions of every item after the updated index also changes. Layout positions are always calculated relative to the start of the list. This causes all the mentioned issues.
 
-(Thus, solutions that force the positions of visible content to be stable without fixing layouting, cannot truly solve this issue; ultimately disagreements arise between the layouting and the rendered positions, which may accumulate, causing discrepancies about what items should be in the visible window, what to render, and when to render)
+(Thus, solutions that force the positions of visible content to be stable, without fixing layouting, cannot truly solve this issue; ultimately disagreements arise between the layouting and the rendered positions, which may accumulate, causing discrepancies about what items should be in the visible window, what to render, and when to render)
 
 ### Sketch
 
