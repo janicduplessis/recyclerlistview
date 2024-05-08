@@ -70,7 +70,7 @@ We allow for item containers to further implement a `onAutoLayout` event to dire
 - Layouting information of all items are reported together, so that more coherent information is collected
 - We may directly collect true rendered item positions, rather than rederiving these values by the relayout algorithm
 
-Together, this means that we never ask the `renderContentContainer` to render with values for positions other than a) the initial layouts, with any subsequent renders of the same values to be dropped by React's prop diffing as no-op, regardless of whether the position was overridden by layouting in `renderContentContainer`, and b) the final exact values already rendered, as reported by `onAutoLayout`. Thus helps avoid layout thrashing or drift, and is probably helpful for performance.
+Together, this means that we never ask the `renderContentContainer` to render with values for positions other than a) the initial layouts, with any subsequent renders of the same values to be dropped by React's prop diffing as no-op, regardless of whether the positions were overridden by layouting in `renderContentContainer`, and b) the final exact values already rendered, as reported by `onAutoLayout`. Thus helps avoid layout thrashing or drift, and is probably helpful for performance.
 
 This `onAutoLayout` is implemented by `@irisjae/flash-list`, along with native implementations of the relative layout algorithm. If provided item containers support this event, please specify the `nonDeterministicMode="autolayout"` prop to use `onAutoLayout` in favour of `onLayout`.
 
