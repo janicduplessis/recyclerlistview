@@ -2,7 +2,7 @@
 
 ## How to use
 
-This package is on npm. `@irisjae/recyclerlistview` should be compatible with `recyclerlistview`, and one should be able to simply swap it out with this instead. Lists without the `preserveVisiblePosition` prop passed should essentially behave identically as `recyclerlistview`. Another method to swap `recyclerlistview` for this package without having to replace imports/requires is to replace the `recyclerlistview` version in `package.json` with `npm:@irisjae/recyclerlistview@1.0.0`.
+This package is on npm. `@irisjae/recyclerlistview` should be compatible with `recyclerlistview`, and one should be able to simply swap it out with this instead. Lists without the `preserveVisiblePosition` prop passed should essentially behave identically as `recyclerlistview`. Another method to swap `recyclerlistview` for this package without having to replace imports/requires is to replace the `recyclerlistview` version in `package.json` with `npm:@irisjae/recyclerlistview@1.0.1`.
 
 This patch to RecyclerListView primarily adds the `preserveVisiblePosition` prop to RecyclerListView. This prop keeps the visible region of the list fixed regardless of changes in the height of items around the region and adding new data to the list.
 
