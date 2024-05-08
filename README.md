@@ -46,7 +46,7 @@ This patch solves this problem by:
 - Relative layouting
   - Whenever possible, always assume that the visible window of content is already in the 'right' position and during relayouting, recalibrate all list item offsets relative to the *visible position*, rather than relative to the start of the list. 
 - 'Refixing'
-  - Shifting the offsets of the list relative to an arbitrary position means that list items at the edges may be pushed away or pull inwards from the edges of the ScrollView. Whenever opportune, or whenever the user approaches list edges, we shift and recalibrate the ScrollView scroll offset and the positions of list item altogether to realign the items.
+  - Shifting the offsets of the list relative to an arbitrary position means that list items at the edges may be pushed away or pulled inwards from the edges of the ScrollView. Whenever opportune, or whenever the user approaches list edges, we shift and recalibrate the ScrollView scroll offset and the positions of list item altogether to realign the items.
  
 ### Details
 
