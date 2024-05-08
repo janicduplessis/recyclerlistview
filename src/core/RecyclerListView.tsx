@@ -1195,7 +1195,7 @@ RecyclerListView.propTypes = {
     edgeVisibleThreshold: PropTypes.number,
     // For controlling whether visible region should still be preserved even when scroll is near the start of list
     startEdgePreserved: PropTypes.bool,
-    // Enables preserving calculated layouts on (small) data changes; suitable if changes are mostly new items at edges, rather than modifications which change item size
+    // Enables preserving calculated layouts on data changes; suitable if changes are mostly new items at edges, rather than modifications which change sizes of existing items
     shiftPreservedLayouts: PropTypes.bool,
 
     //All of the Recyclerlistview item cells are enclosed inside this item container. The idea is pass a native UI component which implements a
