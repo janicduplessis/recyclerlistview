@@ -93,6 +93,10 @@ Good selection of `_fixIndex` is crucial to ensuring the continuity of content a
 
 Relative layouting shifts all item layouts relative to an arbitrary point. This can cause the list to begin at an offset other than '0', and end at an offset that is not the total height of the list.
 
+To adjust for this, we perform a 'refixing' operation, where we use apply a compensating offset to all RecyclerListView internal state for future renders and layouts, and use `setNativeProps` and `scrollTo` to immediately apply the compensation to the positions of items already rendered and to the scroll offset of the list. Because we use `scrollTo`, any ongoing scrolls will be stopped, and care must be taken to not cause such issues.
+
+##### Timing
+
 When a user is far from list edges, it should make no difference to him whether the list is properly positioned with the first and last list items touching the physical start and end of the list. When the edge items or the physical edge becomes visible, this artifact become visible to the user. We attempt to refix as soon as possible, such that this will not happen.
 
 This patch waits until no scrolling is in progress, then attempts to perform refixing. Furthermore, before refixing, we ensure that we have done relayouting for rendered items using autolayout information, if necessary. If refix were to be performed with layout positions that differ with rendered positions, the effect would be visually equivalent to resetting the rendered item positions to the differing values, causing layouts to jump visually.
