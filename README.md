@@ -64,13 +64,13 @@ This may the best we can do if we stick to using plain Views for rendering the l
 
 However, RecyclerListView offers for users to provide their own list item container with the `renderContentContainer` prop, which is used by FlashList to hook the native item rendering and apply a native version of the layouting algorithm with true rendered item sizes before list items become visible. This approach allows access to the native side with more information.
 
-For custom item containers that try to adjust layouts in efforts to stabilise visible content, a better mechanism for RecyclerListView to understand the rendered layout is important. When mismatches between item positions in the native renderContentContainer and RecyclerListView's internal layouts occur, which is probable, especially due to the async communication between the two, layout drifts occur.
+For custom item containers that try to adjust layouts in efforts to stabilise visible content, a better mechanism for RecyclerListView to understand the rendered layout is important. When mismatches between item positions in the native `renderContentContainer` and RecyclerListView's internal layouts occur, which is probable, especially due to the async communication between the two, layout drifts occur.
 
 We allow for item containers to further implement a `onAutoLayout` event to directly report its layouting information to RecyclerListView, subsuming the functions of `onLayout` such that:
 - Layouting information of all items are reported together, so that more coherent information is collected
 - We may directly collect true rendered item positions, rather than rederiving these values by the relayout algorithm
 
-Together, this means that we never ask the renderContentContainer to render with values for positions other than a) the initial layouts, with any subsequent renders of the same values to be dropped by React's prop diffing as no-op, and b) the final exact values already rendered, as reported by onAutoLayout. Thus helps avoid layout thrashing or drift, and is probably helpful for performance.
+Together, this means that we never ask the `renderContentContainer` to render with values for positions other than a) the initial layouts, with any subsequent renders of the same values to be dropped by React's prop diffing as no-op, and b) the final exact values already rendered, as reported by `onAutoLayout`. Thus helps avoid layout thrashing or drift, and is probably helpful for performance.
 
 This `onAutoLayout` is implemented by `@irisjae/flash-list`, along with native implementations of the relative layout algorithm. If provided item containers support this event, please specify the `nonDeterministicMode="autolayout"` prop to use `onAutoLayout` in favour of `onLayout`.
 
