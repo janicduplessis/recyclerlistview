@@ -125,7 +125,7 @@ The threshold for being 'near' the list start can be adjusted with the prop `edg
 
 #### Scroll methods
 
-Without this patch, when scrollTo methods are invoked towards regions where layouts are inaccurate, as the scroll proceeds and the inaccurate estimates are overridden, altering layouts, yet, the target scroll offset remains unchanged, causing discrepancies. Furthermore, the programmatic scrollTo may be very fast, and not all layouts before the target position may be have been determined, causing choppiness when the user proceeds to scroll up and reveal the bad layouts in between.
+Without this patch, when scrollTo methods are invoked towards regions where layouts are inaccurate, as the scroll proceeds and the inaccurate estimates are overridden, altering layouts, yet, the target scroll offset remains unchanged, causing discrepancies. Furthermore, the programmatic scrollTo may be very fast, and not all layouts before the target position may have been determined, causing choppiness when the user proceeds to scroll up and reveal the bad layouts in between.
 
 The latter problem is solved by relative layouting.
 
