@@ -151,7 +151,8 @@ export default class VirtualRenderer {
             this._layoutManager.relayoutFromIndex(0, this._params.itemCount);
         }
         if (this._preserveVisiblePosition) {
-            layoutManager.holdPreservedIndex(0);
+            let preservedIndex = this._params?.initialRenderIndex ?? 0;
+            layoutManager.holdPreservedIndex(preservedIndex);
             layoutManager.unholdPreservedIndex();
         }
     }
