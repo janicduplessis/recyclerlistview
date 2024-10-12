@@ -1,1 +1,1 @@
-module.exports = require("../dist/reactnative/core/StickyContainer");
+module.exports = require("../src/core/StickyContainer");

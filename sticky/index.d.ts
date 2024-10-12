@@ -1,1 +1,1 @@
-export * from "../dist/reactnative/core/StickyContainer";
+export * from "../src/core/StickyContainer";
