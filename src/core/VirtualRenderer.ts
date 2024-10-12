@@ -46,6 +46,10 @@ export default class VirtualRenderer {
     private _startKey: number;
     private _layoutProvider: BaseLayoutProvider = TSCast.cast<BaseLayoutProvider>(null); //TSI
     private _recyclePool: RecycleItemPool = TSCast.cast<RecycleItemPool>(null); //TSI
+    private _preserveVisiblePosition: boolean;
+    private _startEdgePreserved: boolean;
+    private _edgeVisibleThreshold: number;
+    private _shiftPreservedLayouts: boolean;
 
     private _params: RenderStackParams | null;
     private _layoutManager: LayoutManager | null = null;
@@ -56,7 +60,11 @@ export default class VirtualRenderer {
     constructor(renderStackChanged: (renderStack: RenderStack) => void,
                 scrollOnNextUpdate: (point: Point) => void,
                 fetchStableId: StableIdProvider,
-                isRecyclingEnabled: boolean) {
+                isRecyclingEnabled: boolean,
+                preserveVisiblePosition: boolean,
+                startEdgePreserved: boolean,
+                edgeVisibleThreshold: number,
+                shiftPreservedLayouts: boolean) {
         //Keeps track of items that need to be rendered in the next render cycle
         this._renderStack = {};
 
@@ -78,6 +86,14 @@ export default class VirtualRenderer {
         this._startKey = 0;
 
         this.onVisibleItemsChanged = null;
+        this._preserveVisiblePosition = preserveVisiblePosition;
+        this._startEdgePreserved = startEdgePreserved;
+        this._edgeVisibleThreshold = edgeVisibleThreshold;
+        this._shiftPreservedLayouts = shiftPreservedLayouts;
+    }
+
+    public getPreserveVisiblePosition(): boolean {
+        return this._preserveVisiblePosition;
     }
 
     public getLayoutDimension(): Dimension {
@@ -133,6 +149,11 @@ export default class VirtualRenderer {
         this._layoutManager = layoutManager;
         if (this._params) {
             this._layoutManager.relayoutFromIndex(0, this._params.itemCount);
+        }
+        if (this._preserveVisiblePosition) {
+            let preservedIndex = this._params?.initialRenderIndex ?? 0;
+            layoutManager.holdPreservedIndex(preservedIndex);
+            layoutManager.unholdPreservedIndex();
         }
     }
 
@@ -256,7 +277,27 @@ export default class VirtualRenderer {
     }
 
     //Further optimize in later revision, pretty fast for now considering this is a low frequency event
-    public handleDataSetChange(newDataProvider: BaseDataProvider): void {
+    public handleDataSetChange(newDataProvider: BaseDataProvider, scrollOffset: number, holdStableId: string | undefined): void {
+        let preservePosition = false;
+        let shiftStartEdge = false;
+        let shiftLayouts = false;
+        let preservedIndex = -1;
+        let preservedStableId: string | null = null;
+
+        if (this._preserveVisiblePosition && this._layoutManager) {
+            const startEdgeThreshold = this._layoutManager.getLayouts()[0].y + this._edgeVisibleThreshold;
+
+            preservePosition = holdStableId !== undefined || this._startEdgePreserved || scrollOffset > startEdgeThreshold;
+            shiftStartEdge = !preservePosition;
+            shiftLayouts = this._shiftPreservedLayouts;
+            if (shiftLayouts || preservePosition) {
+                preservedIndex = this._layoutManager.preservedIndex();
+                if (holdStableId !== undefined) {
+                    preservedStableId = holdStableId;
+                }
+            }
+        }
+
         const getStableId = newDataProvider.getStableId;
         const maxIndex = newDataProvider.getSize() - 1;
         const activeStableIds: { [key: string]: number } = {};
@@ -276,7 +317,7 @@ export default class VirtualRenderer {
                 if (!ObjectUtil.isNullOrUndefined(index)) {
                     if (index <= maxIndex) {
                         const stableId = getStableId(index);
-                        activeStableIds[stableId] = 1;
+                        activeStableIds[stableId] = index;
                     }
                 }
             }
@@ -289,7 +330,7 @@ export default class VirtualRenderer {
             const key = oldActiveStableIds[i];
             const stableIdItem = this._stableIdToRenderKeyMap[key];
             if (stableIdItem) {
-                if (!activeStableIds[key]) {
+                if (!(key in activeStableIds)) {
                     if (!this._optimizeForAnimations && this._isRecyclingEnabled) {
                         this._recyclePool.putRecycledObject(stableIdItem.type, stableIdItem.key);
                     }
@@ -297,11 +338,17 @@ export default class VirtualRenderer {
 
                     const stackItem = this._renderStack[stableIdItem.key];
                     const dataIndex = stackItem ? stackItem.dataIndex : undefined;
-                    if (!ObjectUtil.isNullOrUndefined(dataIndex) && dataIndex <= maxIndex && this._layoutManager) {
+                    // TODO -- take removed layouts into consideration for _layoutManager.shiftLayouts
+                    if (!shiftLayouts &&
+                        !ObjectUtil.isNullOrUndefined(dataIndex) && dataIndex <= maxIndex &&
+                        this._layoutManager) {
                         this._layoutManager.removeLayout(dataIndex);
                     }
                 } else {
                     keyToStableIdMap[stableIdItem.key] = key;
+                }
+                if (this._renderStack[stableIdItem.key]?.dataIndex === preservedIndex) {
+                    preservedStableId = key;
                 }
             }
         }
@@ -346,6 +393,38 @@ export default class VirtualRenderer {
                 }
             }
         }
+
+        // If the preserved stable id is still in the list, we preserve the position of the stable id
+        if (this._layoutManager) {
+            if (shiftStartEdge) {
+                this._layoutManager.shiftPreservedIndex(0, 0);
+            }
+            if (preservedStableId !== null) {
+                let shiftPreservedIndex = -1;
+                if (preservedStableId in activeStableIds) {
+                    shiftPreservedIndex = activeStableIds[preservedStableId];
+                } else {
+                    // if the item has moved far away from the current view window, the layoutManager shiftPreservedIndex
+                    // still works, but will cause the render stack to be recalculated. preferrably, we should check this
+                    // before the above render stack logic in the future.
+                    for (let i = 0; i < maxIndex; i++) {
+                        if (getStableId(i) === preservedStableId) {
+                            // DEBUG: console.log("stable found");
+                            shiftPreservedIndex = i;
+                            break;
+                        }
+                    }
+                }
+                if (shiftPreservedIndex !== -1) {
+                    if (preservePosition) {
+                        this._layoutManager.shiftPreservedIndex(preservedIndex, shiftPreservedIndex);
+                    }
+                    if (shiftLayouts) {
+                        this._layoutManager.shiftLayouts(shiftPreservedIndex - preservedIndex);
+                    }
+                }
+            }
+        }
     }
 
     private _getCollisionAvoidingKey(): string {
@@ -358,6 +437,7 @@ export default class VirtualRenderer {
             if (this.onVisibleItemsChanged) {
                 this._viewabilityTracker.onVisibleRowsChanged = this._onVisibleItemsChanged;
             }
+            this._viewabilityTracker.onItemsChanged = this._onItemsChanged;
             this._viewabilityTracker.setLayouts(this._layoutManager.getLayouts(), this._params.isHorizontal ?
                 this._layoutManager.getContentDimension().width :
                 this._layoutManager.getContentDimension().height);
@@ -400,6 +480,11 @@ export default class VirtualRenderer {
         }
     }
 
+    private _onItemsChanged = (visibleIndexes: number[], engagedIndexes: number[]): void => {
+        if (this._preserveVisiblePosition && this._layoutManager) {
+            this._layoutManager.preserveIndexes(visibleIndexes, engagedIndexes);
+        }
+    }
     //Updates render stack and reports whether anything has changed
     private _updateRenderStack(itemIndexes: number[]): boolean {
         this._markDirty = false;

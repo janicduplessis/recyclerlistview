@@ -20,10 +20,12 @@ export interface WindowCorrection {
 }
 
 export type TOnItemStatusChanged = ((all: number[], now: number[], notNow: number[]) => void);
+export type TOnItemsChanged = ((visibleIndexes: number[], engagedIndexes: number[]) => void);
 
 export default class ViewabilityTracker {
     public onVisibleRowsChanged: TOnItemStatusChanged | null;
     public onEngagedRowsChanged: TOnItemStatusChanged | null;
+    public onItemsChanged: TOnItemsChanged | null;
 
     private _currentOffset: number;
     private _maxOffset: number;
@@ -55,6 +57,7 @@ export default class ViewabilityTracker {
 
         this.onVisibleRowsChanged = null;
         this.onEngagedRowsChanged = null;
+        this.onItemsChanged = null;
 
         this._relevantDim = { start: 0, end: 0 };
         this._defaultCorrection = { startCorrection: 0, endCorrection: 0, windowShift: 0 };
@@ -110,6 +113,10 @@ export default class ViewabilityTracker {
 
     public getLastActualOffset(): number {
         return this._actualOffset;
+    }
+
+    public getVisibleIndexes(): number[] {
+        return this._visibleIndexes;
     }
 
     public getEngagedIndexes(): number[] {
@@ -321,6 +328,9 @@ export default class ViewabilityTracker {
         this._diffArraysAndCallFunc(newEngagedItems, this._engagedIndexes, this.onEngagedRowsChanged);
         this._visibleIndexes = newVisibleItems;
         this._engagedIndexes = newEngagedItems;
+        if (this.onItemsChanged) {
+            this.onItemsChanged(newVisibleItems, newEngagedItems);
+        }
     }
 
     private _diffArraysAndCallFunc(newItems: number[], oldItems: number[], func: TOnItemStatusChanged | null): void {

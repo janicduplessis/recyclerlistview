@@ -53,6 +53,7 @@ export class GridLayoutManager extends WrapGridLayoutManager {
         } else {
           if (widthDiff < this._acceptableRelayoutDelta) {
             if (heightDiff === 0) {
+              super.overrideLayout(index, dim);
               return false;
             }
             dim.width = layout.width;
