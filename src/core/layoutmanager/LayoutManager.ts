@@ -410,11 +410,19 @@ export class WrapGridLayoutManager extends LayoutManager {
 
                     if (Math.abs(refixOffset) >= 1) {
                         innerScrollComponent.setNativeProps({ style: { height: this._totalHeight } });
+
+                        const children = [];
+                        let currentChild = innerScrollComponent.child;
+                        while (currentChild) {
+                            children.push(currentChild);
+                            currentChild = currentChild.sibling;
+                        }
+
                         for (let i = 0; i < indexes.length; i++) {
                             const index = indexes[i];
-                            if ((index !== undefined) && innerScrollComponent._children[i]) {
+                            if ((index !== undefined) && children[i]) {
                                 const y = this._layouts[index].y;
-                                innerScrollComponent._children[i].setNativeProps({ style: { top: y } });
+                                children[i].setNativeProps({ style: { top: y } });
                             }
                         }
                         relayout();
