@@ -1006,11 +1006,11 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
             const layoutManager = this._virtualRenderer.getLayoutManager() as LayoutManager;
             const renderedLayouts = rawEvent.nativeEvent;
             const relayoutIndex = layoutManager.overrideLayouts(renderedLayouts, offsetsStale);
-        
+
             if (!offsetsStale) {
                 this._pendingAutoLayout = false;
             }
-    
+
             if (relayoutIndex > -1) {
                 if (this._relayoutReqIndex === -1) {
                     this._relayoutReqIndex = relayoutIndex;
@@ -1084,9 +1084,9 @@ export default class RecyclerListView<P extends RecyclerListViewProps, S extends
                         },
                     );
                 }
-            } 
+            }
         }
-    // scroll events appear to be infreuqent and far between during quick momentum scrolls; we cannot set this too small, 
+    // scroll events appear to be infreuqent and far between during quick momentum scrolls; we cannot set this too small,
     // or risk interrupting such scrolls
     }, 1500);
 }
@@ -1187,13 +1187,13 @@ RecyclerListView.propTypes = {
     // Enables an alternate layout algorithm which is superior when the list has large regions where item heights are not precisely known.
     // The alternate algorithm calculates layouts by assuming that the offset of an item chosen from the visible region is correct and
     // to be fixed at its current position, as opposed to the default algorithm which assumes that the layouts in front of the
-    // visible and engaged region is correct and fixed to the start of the scroller. This algorithm works well when the estimated size of 
+    // visible and engaged region is correct and fixed to the start of the scroller. This algorithm works well when the estimated size of
     // items can be very far off from the correct value. Only vertical layouts with a single column is implemented for preserveVisiblePosition
     // at the moment.
     // Because the preserveVisiblePosition layout algorithm performs layouting by forcibly assuming the positioning of visible
     // items to be correct, this can cause the list to be offset at the edges. This will cause issues when the scroll position is close to edges such
     // that the edge is visible. To correct for this, when the user stops scrolling, or the user moves close to edges, the list will trigger
-    // "refix" operations that recalibrates the physical locations of offsets and scroll positions to the correct logical locations. 
+    // "refix" operations that recalibrates the physical locations of offsets and scroll positions to the correct logical locations.
     preserveVisiblePosition: PropTypes.bool,
     // This props selects the method of determining rendered layouts with forceNonDeterministicRendering.
     // This should usually be 'normal', which detects rendered layout sizes using the onLayout event from View.
@@ -1201,8 +1201,8 @@ RecyclerListView.propTypes = {
     // so that information from onAutoLayout is used instead. This allows information on all the rendered items to be
     // taken into account, so that it has potential to be faster and should not cause issues due to onLayouts of items arriving
     // at different timings or being dropped. Furthermore, the autolayout mode allows the rendered offset to be taken into account,
-    // as opposed to just the heights of items. The preserveVisiblePosition layout algorithm will attempt to cooperate with the 
-    // rendered offset from autolayout whenever possible, so that layout shifts due to mismatch between rendered layout and the 
+    // as opposed to just the heights of items. The preserveVisiblePosition layout algorithm will attempt to cooperate with the
+    // rendered offset from autolayout whenever possible, so that layout shifts due to mismatch between rendered layout and the
     // logical layout are minimized. If possible, this should be used if the renderContentContainer component performs layouting by itself.
     nonDeterministicMode: PropTypes.oneOf([ "autolayout", "normal" ]),
     // For controlling edge thresholds for refixing and for preserving positions
